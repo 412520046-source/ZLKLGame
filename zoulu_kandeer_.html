@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"/>
+  <title>鄒路看鹿</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0c1410;font-family:Georgia,"Times New Roman",serif;color:#f7f5e9}
+#game-root{position:relative;width:100%;height:100vh;max-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at top,#1c2b22 0,#050806 55%,#020302 100%)}
+#game-canvas{height:100vh;max-height:100vh;aspect-ratio:9/16;width:auto;display:block}
+#hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:5;pointer-events:none}
+.pill{min-width:96px;padding:6px 12px;border-radius:999px;border:1px solid #4e7a5a;background:rgba(5,10,7,0.85);color:#f4f1e4;text-align:center;font-size:14px;transition:border-color .25s,color .25s}
+.pill.warn{border-color:#c84030;color:#ffb0a0}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,rgba(3,6,4,.75),rgba(1,2,1,.95));opacity:0;pointer-events:none;transition:opacity 200ms ease-out;z-index:10}
+.overlay.visible{opacity:1;pointer-events:auto}
+.overlay-panel{width:min(92vw,380px);max-height:90vh;overflow-y:auto;padding:18px 18px 20px;border-radius:18px;background:linear-gradient(145deg,#111a14,#1b2b20);border:1px solid #4b7d5b;box-shadow:0 16px 40px rgba(0,0,0,.65)}
+.overlay-panel h1{font-size:22px;margin-bottom:8px;letter-spacing:.03em}
+.rules{font-size:13px;line-height:1.5;margin:6px 0 12px}
+.rule-section+.rule-section{margin-top:8px}
+.rule-section h2{font-size:14px;margin-bottom:2px;color:#e4ddc0}
+.rule-section ul{list-style:none}
+.rule-section li{margin-bottom:2px}
+.tag{padding:1px 6px;border-radius:999px;border:1px solid;font-size:12px}
+.tag.good{border-color:#6cbf7a;color:#b6f2c3}
+.tag.bad{border-color:#c65b4b;color:#fbc2b7}
+.tag.plant{border-color:#f0c85e;color:#ffe9aa}
+.score.good{color:#9fe29d}
+.score.bad{color:#ff9b9b}
+.time{color:#ffe38a}
+.primary-btn{width:100%;padding:10px 14px;margin-top:2px;border-radius:999px;border:1px solid #4f815f;background:linear-gradient(145deg,#25432f,#345a3f);color:#f7f5ea;font-family:inherit;font-size:15px;letter-spacing:.05em;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.primary-btn:active{background:linear-gradient(145deg,#1f3928,#2b4a36)}
+.result-title{margin-top:4px;margin-bottom:4px;font-size:16px}
+.result-score{font-size:14px;margin-bottom:8px}
+.floating-label{position:absolute;left:50%;top:16%;transform:translateX(-50%);padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid #f0c85e;background:rgba(16,20,10,.9);color:#ffe9aa;opacity:0;pointer-events:none;transition:opacity 180ms ease-out,transform 180ms ease-out;z-index:6}
+.floating-label.visible{opacity:1;transform:translate(-50%,-6px)}
+  </style>
+</head>
+<body>
+<div id="game-root">
+  <div id="hud">
+    <div class="pill" id="pill-time">時間：<span id="time-label">30</span>s</div>
+    <div class="pill">分數：<span id="score-label">0</span></div>
+  </div>
+  <canvas id="game-canvas"></canvas>
+  <!-- ① 起始畫面：輸入名稱 -->
+  <div id="overlay-start" class="overlay visible">
+    <div class="overlay-panel">
+      <h1>鄒路看鹿</h1>
+      <p style="font-size:13px;color:#b8d4a4;line-height:1.6;margin:6px 0 14px">在鄒族的山林中，辨別獵物與禁忌。<br>30 秒內累積 <strong style="color:#ffe38a">50 分</strong> 以上成為 suaemi 大勇士！</p>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:#8dba7a;display:block;margin-bottom:6px">輸入你的獵人名號（最多 10 字）</label>
+        <input id="player-name" type="text" maxlength="10" placeholder="ZOUQI"
+          style="width:100%;padding:9px 12px;border-radius:999px;border:1px solid #4f815f;background:rgba(5,15,8,0.85);color:#f7f5ea;font-family:Georgia,serif;font-size:15px;text-align:center;outline:none;letter-spacing:.1em"/>
+        <p id="name-error" style="font-size:11px;color:#ff9b9b;text-align:center;margin-top:5px;min-height:14px"></p>
+      </div>
+      <button id="btn-enter" class="primary-btn">進入山林</button>
+    </div>
+  </div>
+
+  <!-- ① 夜間狩獵場景說明 -->
+  <div id="overlay-night" class="overlay">
+    <div class="overlay-panel" style="text-align:center">
+      <div style="font-size:44px;margin-bottom:10px">🌙</div>
+      <h1 style="font-size:19px;color:#c8d8f8;margin-bottom:12px;letter-spacing:.05em">黑夜中的山林</h1>
+      <div style="background:rgba(10,18,30,.7);border:1px solid #3a5080;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+        <p style="font-size:13px;color:#aac4e8;line-height:2">
+          🌿 你看到的場景為什麼這麼暗？<br>
+          <strong style="color:#e8d890;font-size:14px">鄒族的傳統狩獵多在晚上進行喔～</strong><br>
+          <span style="font-size:12px;color:#8aaccc">夜晚能更容易接近獵物，<br>是鄒族祖先代代相傳的智慧。</span>
+        </p>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:14px">
+        <div style="background:rgba(20,30,20,.8);border:1px solid #3a6040;border-radius:8px;padding:8px 10px;font-size:11px;color:#9aba88;line-height:1.6">
+          🦌 夜間辨識動物<br>需要更專注的眼力
+        </div>
+        <div style="background:rgba(20,30,20,.8);border:1px solid #3a6040;border-radius:8px;padding:8px 10px;font-size:11px;color:#9aba88;line-height:1.6">
+          🌿 月光下的植物<br>閃著微光等待採集
+        </div>
+      </div>
+      <button id="btn-night" class="primary-btn">我準備好了</button>
+    </div>
+  </div>
+
+  <!-- ② 教學頁1：山羌 & 公鹿 -->
+  <div id="overlay-tut1" class="overlay">
+    <div class="overlay-panel">
+      <h1 style="font-size:17px;color:#ffe38a;margin-bottom:10px">山林獵物（一）</h1>
+      <div style="display:flex;gap:12px;margin-bottom:14px">
+        <div style="flex:1;background:rgba(30,50,25,.7);border:1px solid #4b7d5b;border-radius:12px;padding:12px;text-align:center">
+          <canvas id="tut-c1" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#b6f2c3;font-size:13px;font-weight:bold">山羌</div>
+          <div style="color:#9fe29d;font-size:18px;font-weight:bold;margin:4px 0">＋5分</div>
+          <div style="color:#8dba7a;font-size:11px;line-height:1.5">台灣山區常見的<br>小型鹿科動物</div>
+        </div>
+        <div style="flex:1;background:rgba(30,50,25,.7);border:1px solid #4b7d5b;border-radius:12px;padding:12px;text-align:center">
+          <canvas id="tut-c2" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#b6f2c3;font-size:13px;font-weight:bold">公鹿</div>
+          <div style="color:#9fe29d;font-size:18px;font-weight:bold;margin:4px 0">＋5分</div>
+          <div style="color:#8dba7a;font-size:11px;line-height:1.5">頭頂有鹿角的<br>成年雄鹿</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#8dba7a;text-align:center;margin-bottom:12px">草叢搖動時出現，快速點擊得分！</div>
+      <button id="btn-tut1" class="primary-btn">繼續</button>
+    </div>
+  </div>
+
+  <!-- ③ 教學頁2：帶仔母山豬 & 帶仔鹿 -->
+  <div id="overlay-tut2" class="overlay">
+    <div class="overlay-panel">
+      <h1 style="font-size:17px;color:#ff9b9b;margin-bottom:10px">山林禁忌（二）</h1>
+      <div style="display:flex;gap:12px;margin-bottom:14px">
+        <div style="flex:1;background:rgba(50,20,15,.7);border:1px solid #7d3b3b;border-radius:12px;padding:12px;text-align:center">
+          <canvas id="tut-c3" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#fbc2b7;font-size:13px;font-weight:bold">帶仔山豬</div>
+          <div style="color:#ff9b9b;font-size:18px;font-weight:bold;margin:4px 0">－15分</div>
+          <div style="color:#d08888;font-size:11px;line-height:1.5">帶著幼仔的母豬<br>絕對不能傷害！</div>
+        </div>
+        <div style="flex:1;background:rgba(50,20,15,.7);border:1px solid #7d3b3b;border-radius:12px;padding:12px;text-align:center">
+          <canvas id="tut-c4" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#fbc2b7;font-size:13px;font-weight:bold">帶仔母鹿</div>
+          <div style="color:#ff9b9b;font-size:18px;font-weight:bold;margin:4px 0">－15分</div>
+          <div style="color:#d08888;font-size:11px;line-height:1.5">帶著幼仔的母鹿<br>要小心分辨！</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#d08888;text-align:center;margin-bottom:12px">誤傷帶仔母獸是鄒族的禁忌，分數大扣！</div>
+      <button id="btn-tut2" class="primary-btn">繼續</button>
+    </div>
+  </div>
+
+  <!-- ④ 教學頁3：植物 -->
+  <div id="overlay-tut3" class="overlay">
+    <div class="overlay-panel">
+      <h1 style="font-size:17px;color:#ffe38a;margin-bottom:10px">鄒族特有植物（三）</h1>
+      <div style="display:flex;gap:12px;margin-bottom:14px">
+        <div style="flex:1;background:rgba(20,35,15,.7);border:1px solid #6a7d3b;border-radius:12px;padding:12px;text-align:center">
+          <canvas id="tut-c5" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#ffe9aa;font-size:13px;font-weight:bold">金草石斛</div>
+          <div style="color:#ffe38a;font-size:18px;font-weight:bold;margin:4px 0">＋3秒</div>
+          <div style="color:#c4b870;font-size:11px;line-height:1.5">阿里山特有蘭科<br>點擊即延長時間</div>
+        </div>
+        <div style="flex:1;background:rgba(20,35,15,.7);border:1px solid #6a7d3b;border-radius:12px;padding:12px;text-align:center">
+          <canvas id="tut-c6" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#ffe9aa;font-size:13px;font-weight:bold">雀榕</div>
+          <div style="color:#ffe38a;font-size:18px;font-weight:bold;margin:4px 0">＋3秒</div>
+          <div style="color:#c4b870;font-size:11px;line-height:1.5">榕屬植物，鳥類<br>喜愛的果實</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#c4b870;text-align:center;margin-bottom:12px">從大樹旁不定時掉落，點擊即可採集！</div>
+      <button id="btn-tut3" class="primary-btn">遊戲開始！</button>
+    </div>
+  </div>
+
+  <!-- ⑤ 結果畫面 -->
+  <div id="overlay-result" class="overlay">
+    <div class="overlay-panel">
+      <h1>狩獵結束</h1>
+      <p id="result-title" class="result-title"></p>
+      <p id="result-score" class="result-score"></p>
+      <div id="leaderboard-wrap" style="margin:10px 0 14px">
+        <div style="font-size:13px;color:#8dba7a;margin-bottom:6px;text-align:center">— 山林英雄榜 —</div>
+        <div id="leaderboard-list" style="font-size:12px"></div>
+      </div>
+      <button id="btn-restart" class="primary-btn">再走一趟山鹿</button>
+    </div>
+  </div>
+  <div id="floating-label" class="floating-label"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ── Canvas ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('game-canvas');
+const ctx    = canvas.getContext('2d');
+const W = 360, H = 640;
+canvas.width = W; canvas.height = H;
+
+// roundRect polyfill for Safari < 15.4
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+    r = Math.min(r, w/2, h/2);
+    this.beginPath();
+    this.moveTo(x+r,y); this.lineTo(x+w-r,y);
+    this.quadraticCurveTo(x+w,y,x+w,y+r);
+    this.lineTo(x+w,y+h-r);
+    this.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    this.lineTo(x+r,y+h);
+    this.quadraticCurveTo(x,y+h,x,y+h-r);
+    this.lineTo(x,y+r);
+    this.quadraticCurveTo(x,y,x+r,y);
+    this.closePath();
+    return this;
+  };
+}
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+const hudTime  = document.getElementById('time-label');
+const hudScore = document.getElementById('score-label');
+const pillTime = document.getElementById('pill-time');
+const ovStart  = document.getElementById('overlay-start');
+const ovNight  = document.getElementById('overlay-night');
+const ovTut1   = document.getElementById('overlay-tut1');
+const ovTut2   = document.getElementById('overlay-tut2');
+const ovTut3   = document.getElementById('overlay-tut3');
+const ovResult = document.getElementById('overlay-result');
+const resTitle = document.getElementById('result-title');
+const resScore = document.getElementById('result-score');
+const floatLbl = document.getElementById('floating-label');
+const nameInput= document.getElementById('player-name');
+const nameError= document.getElementById('name-error');
+
+let currentPlayerName = 'HUNTER';
+
+// ── Name input: allow any characters up to 10 ────────────────────────────
+nameInput.addEventListener('input', () => {
+  if (nameInput.value.length > 10) nameInput.value = nameInput.value.slice(0, 10);
+  nameError.textContent = '';
+});
+
+// ── Tutorial canvas pre-renders ───────────────────────────────────────────
+function drawTutPreviews() {
+  // tut-c1: 山羌
+  (function(){ const c=document.getElementById('tut-c1'); if(!c)return; const x=c.getContext('2d'); drawDeerSmall(x,90,80,'#d6b27a',false,false,'山羌'); })();
+  // tut-c2: 公鹿
+  (function(){ const c=document.getElementById('tut-c2'); if(!c)return; const x=c.getContext('2d'); drawDeerSmall(x,90,80,'#c4905a',true,false,'公鹿'); })();
+  // tut-c3: 帶仔山豬
+  (function(){ const c=document.getElementById('tut-c3'); if(!c)return; const x=c.getContext('2d'); drawBoarSmall(x,90,80); })();
+  // tut-c4: 帶仔母鹿
+  (function(){ const c=document.getElementById('tut-c4'); if(!c)return; const x=c.getContext('2d'); drawDeerSmall(x,90,80,'#aa7b5c',false,true,'帶仔母鹿'); })();
+  // tut-c5: 金草石斛
+  (function(){ const c=document.getElementById('tut-c5'); if(!c)return; const x=c.getContext('2d'); drawOrchidSmall(x,90,80); })();
+  // tut-c6: 雀榕
+  (function(){ const c=document.getElementById('tut-c6'); if(!c)return; const x=c.getContext('2d'); drawFigSmall(x,90,80); })();
+}
+
+function drawDeerSmall(x,w,h,color,antlers,hasYoung,label){
+  x.clearRect(0,0,w,h);
+  const bh=h*0.45,bw=w*0.65,bx=(w-bw)/2,by=h-bh-10;
+  const shade_=(c,p)=>{const n=parseInt(c.replace('#',''),16);const a=Math.round(2.55*p);const r=Math.min(255,Math.max(0,(n>>16)+a));const g=Math.min(255,Math.max(0,((n>>8)&0xff)+a));const b=Math.min(255,Math.max(0,(n&0xff)+a));return'#'+(0x1000000+r*65536+g*256+b).toString(16).slice(1);};
+  const bg=x.createLinearGradient(bx,by,bx,by+bh); bg.addColorStop(0,shade_(color,-15)); bg.addColorStop(1,shade_(color,5));
+  x.fillStyle=bg; x.beginPath(); x.roundRect(bx,by,bw,bh,5); x.fill();
+  const hw=bw*0.35,hh=bh*0.65,hx=bx+bw-hw+1,hy=by-hh*0.25;
+  x.beginPath(); x.roundRect(hx,hy,hw,hh,5); x.fill();
+  x.fillStyle=shade_(color,-20);
+  x.beginPath(); x.ellipse(hx+hw*0.2,hy+hh*0.1,3,6,0,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(hx+hw*0.8,hy+hh*0.12,3,6,0,0,Math.PI*2); x.fill();
+  x.fillStyle='#111'; x.beginPath(); x.arc(hx+hw*0.7,hy+hh*0.35,2,0,Math.PI*2); x.fill();
+  x.strokeStyle=shade_(color,-30); x.lineWidth=2.5;
+  for(let i=0;i<3;i++){const lx=bx+bw*(0.2+0.3*(i/2)); x.beginPath(); x.moveTo(lx,by+bh*0.1); x.lineTo(lx,h-8); x.stroke();}
+  if(antlers){x.strokeStyle='#c6b493';x.lineWidth=1.5;const ax=hx+hw*0.4,ay=hy+hh*0.1;x.beginPath();x.moveTo(ax,ay);x.lineTo(ax-6,ay-12);x.moveTo(ax,ay);x.lineTo(ax+6,ay-14);x.stroke();}
+  if(hasYoung){
+    const fy=by+bh*0.55,fx=bx-bw*0.28,fw=bw*0.36,fh=bh*0.42;
+    x.fillStyle=shade_(color,-10);x.beginPath();x.roundRect(fx,fy,fw,fh,4);x.fill();
+    // fawn eyes
+    x.fillStyle='#111';x.beginPath();x.arc(fx+fw*0.65,fy+fh*0.3,1.6,0,Math.PI*2);x.fill();
+    x.fillStyle='rgba(255,255,255,0.7)';x.beginPath();x.arc(fx+fw*0.68,fy+fh*0.25,0.6,0,Math.PI*2);x.fill();
+  }
+}
+function drawBoarSmall(x,w,h){
+  x.clearRect(0,0,w,h);
+  const bh=h*0.42,bw=w*0.7,bx=(w-bw)/2,by=h-bh-10;
+  const bg=x.createLinearGradient(bx,by,bx,by+bh); bg.addColorStop(0,'#332824'); bg.addColorStop(1,'#1e1512');
+  x.fillStyle=bg; x.beginPath(); x.roundRect(bx,by,bw,bh,5); x.fill();
+  const hw=bw*0.42,hh=bh*0.7,hx=bx-hw*0.08,hy=by-hh*0.08;
+  x.beginPath(); x.roundRect(hx,hy,hw,hh,5); x.fill();
+  x.fillStyle='#000'; x.beginPath(); x.arc(hx+hw*0.65,hy+hh*0.4,2,0,Math.PI*2); x.fill();
+  const sw=hw*0.42,sh=hh*0.3,sx=hx-sw*0.05,sy=hy+hh*0.38;
+  x.fillStyle='#5b4742'; x.beginPath(); x.roundRect(sx,sy,sw,sh,3); x.fill();
+  const pigW=bw*0.38,pigH=bh*0.36,px_=bx+bw*0.48,py_=by+bh*0.62;
+  x.fillStyle='#5c4139'; x.beginPath(); x.roundRect(px_,py_,pigW,pigH,3); x.fill();
+  // piglet eyes
+  x.fillStyle='#111';x.beginPath();x.arc(px_+pigW*0.72,py_+pigH*0.28,1.6,0,Math.PI*2);x.fill();
+  x.fillStyle='rgba(255,255,255,0.7)';x.beginPath();x.arc(px_+pigW*0.75,py_+pigH*0.22,0.6,0,Math.PI*2);x.fill();
+}
+function drawOrchidSmall(x,w,h){
+  x.clearRect(0,0,w,h); const cx=w/2;
+  x.strokeStyle='#3b6b2e'; x.lineWidth=2.5;
+  x.beginPath(); x.moveTo(cx,h-5); x.lineTo(cx,h*0.38); x.stroke();
+  x.fillStyle='#3f7b36';
+  for(let i=0;i<3;i++){x.beginPath();x.ellipse(cx-10,h-6-i*5,7,3.5,-0.7,0,Math.PI*2);x.ellipse(cx+10,h-8-i*5,7,3.5,0.7,0,Math.PI*2);x.fill();}
+  x.fillStyle='#f4d868';
+  for(let i=0;i<4;i++){x.beginPath();x.arc(cx+(i-1.5)*5.5,h*0.35+(i%2)*3,3.5,0,Math.PI*2);x.fill();}
+}
+function drawFigSmall(x,w,h){
+  x.clearRect(0,0,w,h); const cx=w/2,cy=h*0.38;
+  x.strokeStyle='#5b432b'; x.lineWidth=3;
+  x.beginPath(); x.moveTo(cx-14,cy-6); x.lineTo(cx+14,cy+6); x.stroke();
+  x.fillStyle='#284c2f';
+  x.beginPath(); x.ellipse(cx-11,cy-5,12,8,-0.8,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(cx+11,cy+5,12,8,0.8,0,Math.PI*2); x.fill();
+  const fc=['#b1362b','#da4b3a','#8b241c'];
+  for(let i=0;i<4;i++){x.fillStyle=fc[i%3];x.beginPath();x.arc(cx+(i-1.5)*7,cy+(i%2)*5,4.5,0,Math.PI*2);x.fill();}
+}
+
+// ── Firebase Leaderboard ──────────────────────────────────────────────────
+// 使用 Firestore REST API：跨裝置同步排行榜
+const FB_API_KEY   = 'AIzaSyCqfYReYZ2XHvkBiHF99oHTv3-z11QFFjQ';
+const FB_PROJECT   = 'hunter-fe338';
+const FB_COLLECTION = 'zou_deer_scores';
+const FB_DB_URL    = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
+
+function makeGameId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return `game-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function compareLeaderboard(a, b) {
+  const scoreDiff = toInt(b.score) - toInt(a.score);
+  if (scoreDiff !== 0) return scoreDiff;
+
+  // 同分時：扣分越少，排名越前面
+  const penaltyDiff = toInt(a.penaltyScore) - toInt(b.penaltyScore);
+  if (penaltyDiff !== 0) return penaltyDiff;
+
+  // 如果分數與扣分都相同，先完成的排前面
+  return String(a.createdAtLocal || '').localeCompare(String(b.createdAtLocal || ''));
+}
+
+async function fbPost(path, body) {
+  const res = await fetch(`${FB_DB_URL}/${path}?key=${FB_API_KEY}`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function fbQuery(collectionId, orderField, limitCount) {
+  const res = await fetch(`https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents:runQuery?key=${FB_API_KEY}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      structuredQuery: {
+        from:[{collectionId}],
+        orderBy:[{field:{fieldPath:orderField},direction:'DESCENDING'}],
+        limit: limitCount
+      }
+    })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function submitScore(name, score, penaltyScore, gameId) {
+  try {
+    const now = new Date().toISOString();
+    await fbPost(FB_COLLECTION, {
+      fields:{
+        name:           {stringValue: name},
+        score:          {integerValue: String(Math.max(0, toInt(score)))},
+        penaltyScore:   {integerValue: String(Math.max(0, toInt(penaltyScore)))},
+        gameId:         {stringValue: gameId || makeGameId()},
+        createdAtLocal: {stringValue: now},
+        createdAt:      {timestampValue: now}
+      }
+    });
+  } catch(e) {
+    console.warn('Firebase write failed', e);
+    throw e;
+  }
+}
+
+async function fetchLeaderboard() {
+  try {
+    // 多抓一些再在前端依「分數高 → 扣分少」排序，避免同分排序不準
+    const docs = await fbQuery(FB_COLLECTION, 'score', 50);
+    return (docs || [])
+      .filter(d => d.document)
+      .map(d => {
+        const f = d.document.fields || {};
+        return {
+          name: f.name && f.name.stringValue ? f.name.stringValue : 'ZOUQI',
+          score: toInt(f.score && (f.score.integerValue ?? f.score.doubleValue)),
+          penaltyScore: toInt(f.penaltyScore && (f.penaltyScore.integerValue ?? f.penaltyScore.doubleValue)),
+          createdAtLocal: f.createdAtLocal && f.createdAtLocal.stringValue ? f.createdAtLocal.stringValue : ''
+        };
+      })
+      .sort(compareLeaderboard)
+      .slice(0, 5);
+  } catch(e) {
+    console.warn('Firebase read failed', e);
+    return getLocalLeaderboard();
+  }
+}
+
+function getLocalLeaderboard() {
+  try {
+    const lb = JSON.parse(localStorage.getItem('zoulu_lb_local') || '[]');
+    return Array.isArray(lb) ? lb.sort(compareLeaderboard).slice(0, 5) : [];
+  } catch(e){ return []; }
+}
+
+// Fallback local save when Firebase is temporarily unavailable
+function saveLocalScore(name, score, penaltyScore, gameId) {
+  try {
+    let lb = JSON.parse(localStorage.getItem('zoulu_lb_local') || '[]');
+    lb.push({
+      name,
+      score: Math.max(0, toInt(score)),
+      penaltyScore: Math.max(0, toInt(penaltyScore)),
+      gameId: gameId || makeGameId(),
+      createdAtLocal: new Date().toISOString()
+    });
+    lb = lb.sort(compareLeaderboard).slice(0, 5);
+    localStorage.setItem('zoulu_lb_local', JSON.stringify(lb));
+  } catch(e){}
+}
+
+function renderLeaderboard(entries, myName, myScore, myPenaltyScore) {
+  const el = document.getElementById('leaderboard-list');
+  const sortedEntries = (entries || []).sort(compareLeaderboard).slice(0, 5);
+  if (!sortedEntries.length) {
+    el.innerHTML = '<div style="color:#666;text-align:center;font-size:12px">尚無紀錄</div>';
+    return;
+  }
+  let meMarked = false;
+  el.innerHTML = sortedEntries.map((entry, i) => {
+    const isMe = !meMarked && entry.name === myName && toInt(entry.score) === toInt(myScore) && toInt(entry.penaltyScore) === toInt(myPenaltyScore);
+    if (isMe) meMarked = true;
+    const medal = ['🥇','🥈','🥉'][i] || `${i+1}.`;
+    const bg = isMe ? 'rgba(100,200,80,.15)' : 'transparent';
+    const nameColor = isMe ? '#ffe38a' : '#c8d8b8';
+    const scoreColor = entry.score >= 50 ? '#9fe29d' : '#f4f1e4';
+    return `<div title="扣分：${toInt(entry.penaltyScore)}" style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:${bg};margin-bottom:2px">
+      <span style="color:#8dba7a;width:26px;font-size:13px">${medal}</span>
+      <span style="flex:1;color:${nameColor};font-size:13px;letter-spacing:.05em">${entry.name}</span>
+      <span style="color:#ffb0a0;font-size:12px;margin-right:8px">扣${toInt(entry.penaltyScore)}</span>
+      <span style="color:${scoreColor};font-size:13px;font-weight:bold">${toInt(entry.score)}</span>
+    </div>`;
+  }).join('');
+}
+
+// Button listeners
+document.getElementById('btn-enter').addEventListener('click', () => {
+  const raw = nameInput.value.trim();
+  if (!raw) { nameError.textContent = '請輸入名號再進入山林！'; return; }
+  currentPlayerName = raw.slice(0, 10);
+  nameError.textContent = '';
+  ovStart.classList.remove('visible');
+  ovNight.classList.add('visible');
+});
+document.getElementById('btn-night').addEventListener('click', () => {
+  ovNight.classList.remove('visible');
+  ovTut1.classList.add('visible');
+  drawTutPreviews();
+});
+document.getElementById('btn-tut1').addEventListener('click', () => {
+  ovTut1.classList.remove('visible');
+  ovTut2.classList.add('visible');
+});
+document.getElementById('btn-tut2').addEventListener('click', () => {
+  ovTut2.classList.remove('visible');
+  ovTut3.classList.add('visible');
+});
+document.getElementById('btn-tut3').addEventListener('click', () => {
+  ovTut3.classList.remove('visible');
+  startGame();
+});
+document.getElementById('btn-restart').addEventListener('click', () => {
+  ovResult.classList.remove('visible');
+  ovStart.classList.add('visible');
+  nameInput.value = currentPlayerName;
+});
+
+// ── Types & Phases ────────────────────────────────────────────────────────
+const T = { MUNTJAC:'m', BUCK:'b', DOE:'d', BOAR:'p', ORCHID:'o', FIG:'f' };
+const PH = { NORMAL:0, MIGRATION:1, FINAL:2 };
+
+// Spawn interval [min,max] in seconds — migration/final are 25% faster
+const SPAWN_RANGE = {
+  [PH.NORMAL]:    [0.70, 1.10],
+  [PH.MIGRATION]: [0.525, 0.825],
+  [PH.FINAL]:     [0.525, 0.825],
+};
+
+// How long animals stay visible per phase
+const ANIMAL_DUR = {
+  [PH.NORMAL]:    [1.4, 2.0],
+  [PH.MIGRATION]: [1.05, 1.50],
+  [PH.FINAL]:     [1.05, 1.50],
+};
+
+// Plants: in migration/final they are eaten quickly
+const PLANT_DUR = {
+  [PH.NORMAL]:    [2.2, 3.0],
+  [PH.MIGRATION]: [0.45, 0.75],
+  [PH.FINAL]:     [0.45, 0.75],
+};
+
+const RUSTLE_DELAY  = 0.36;  // seconds between rustle and animal appearing
+const JUMP_SPEED    = 3.2;   // alpha units/s (0→1 in ~0.31s each way)
+const JUMP_ITV_MIN  = 1.3;
+const JUMP_ITV_MAX  = 2.4;
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+const clamp = (v,lo,hi) => Math.max(lo, Math.min(hi, v));
+const rnd   = (lo,hi)   => lo + Math.random() * (hi - lo);
+
+function shade(hex, pct) {
+  const n = parseInt(hex.replace('#',''), 16);
+  const a = Math.round(2.55 * pct);
+  const r = clamp((n>>16)+a, 0, 255);
+  const g = clamp(((n>>8)&0xff)+a, 0, 255);
+  const b = clamp((n&0xff)+a, 0, 255);
+  return '#' + (0x1000000 + r*0x10000 + g*0x100 + b).toString(16).slice(1);
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────
+let ac = null;
+function initAudio() {
+  if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+}
+function _beep(type, f0, f1, dur, vol=0.17) {
+  if (!ac) return;
+  try {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f1, ac.currentTime + dur);
+    g.gain.setValueAtTime(0, ac.currentTime);
+    g.gain.linearRampToValueAtTime(vol, ac.currentTime + 0.025);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    o.connect(g).connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur + 0.05);
+  } catch(e) {}
+}
+const playRustle  = () => _beep('triangle', 220, 1100, 0.28, 0.13);
+const playGoodHit = () => _beep('sine',     900, 350,  0.18, 0.20);
+const playBadHit  = () => _beep('sawtooth', 180, 70,   0.35, 0.20);
+const playPlant   = () => _beep('square',   660, 990,  0.17, 0.15);
+
+// ── Bush layout constants ─────────────────────────────────────────────────
+const ROWS       = 3;
+const COLS       = 4;
+const BUSH_ROW_Y = [H * 0.75, H * 0.66, H * 0.58];
+const TOTAL_W    = W * 0.90;
+const START_X    = (W - TOTAL_W) / 2;
+const BUSH_W     = TOTAL_W / COLS * 0.90;
+const BUSH_H     = H * 0.12;
+const COL_STEP   = TOTAL_W / COLS;
+
+// Each row has two gradient stops [top-colour, bottom-colour]
+const BUSH_COLS = [
+  ['#1a3a24','#24482c'],   // row 0 – front, richest
+  ['#163020','#1e3c28'],   // row 1 – mid
+  ['#102416','#192e1e'],   // row 2 – back, darkest
+];
+
+// ── Bush class ─────────────────────────────────────────────────────────────
+class Bush {
+  constructor(row, col) {
+    this.row = row; this.col = col;
+    this.x   = START_X + col * COL_STEP;
+    this.y   = BUSH_ROW_Y[row];
+    this.w   = BUSH_W;
+    this.h   = BUSH_H;
+    this.occupant = null;  // null | PendingSpawn | Entity
+    this.rustleT  = 0;
+  }
+  get isFree() { return this.occupant === null; }
+  rustle()     { this.rustleT = 0.42; }
+  update(dt)   { if (this.rustleT > 0) this.rustleT = Math.max(0, this.rustleT - dt); }
+
+  draw() {
+    const sway = this.rustleT > 0 ? Math.sin(this.rustleT * 38) * 5 : 0;
+    const [c1, c2] = BUSH_COLS[this.row];
+
+    ctx.save();
+    ctx.translate(sway, 0);
+
+    // ── Drop shadow ──
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.w*0.5, this.y + 5, this.w*0.48, 5, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Main bush body ──
+    const g = ctx.createLinearGradient(this.x, this.y - this.h, this.x, this.y);
+    g.addColorStop(0, c1);
+    g.addColorStop(0.6, c2);
+    g.addColorStop(1, shade(c2, -12));
+
+    ctx.beginPath();
+    const r = this.h / 2;
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(this.x, this.y - r);
+    ctx.quadraticCurveTo(this.x + this.w*0.5, this.y - this.h, this.x + this.w, this.y - r);
+    ctx.lineTo(this.x + this.w, this.y);
+    ctx.closePath();
+    ctx.fillStyle = g;
+    ctx.fill();
+
+    // ── Inner shadow (bottom-center dark pocket) ──
+    const innerSh = ctx.createRadialGradient(
+      this.x + this.w*0.5, this.y, 4,
+      this.x + this.w*0.5, this.y - this.h*0.4, this.w*0.45
+    );
+    innerSh.addColorStop(0, 'rgba(0,0,0,0.28)');
+    innerSh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(this.x, this.y - r);
+    ctx.quadraticCurveTo(this.x + this.w*0.5, this.y - this.h, this.x + this.w, this.y - r);
+    ctx.lineTo(this.x + this.w, this.y);
+    ctx.closePath();
+    ctx.fillStyle = innerSh;
+    ctx.fill();
+
+    // ── Moonlit top-edge highlight ──
+    ctx.save();
+    ctx.globalAlpha = this.row === 0 ? 0.18 : 0.10;
+    ctx.strokeStyle = '#7fc890';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.w*0.1, this.y - r*0.9);
+    ctx.quadraticCurveTo(this.x + this.w*0.5, this.y - this.h + 2, this.x + this.w*0.9, this.y - r*0.9);
+    ctx.stroke();
+    ctx.restore();
+
+    // ── Leaf texture — small oval clusters peeking out ──
+    ctx.save();
+    ctx.globalAlpha = 0.30;
+    const leafColor = this.row === 0 ? '#3a8040' : '#234828';
+    for (let i = 0; i < 5; i++) {
+      const lx = this.x + this.w*(0.15 + i*0.17);
+      const ly = this.y - this.h*(0.35 + (i%2)*0.18);
+      ctx.fillStyle = i%2===0 ? leafColor : shade(leafColor,-15);
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, 4, 2.5, (i*0.6), 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // ── Rustle glow ──
+    if (this.rustleT > 0.08) {
+      ctx.globalAlpha = Math.min(this.rustleT * 1.6, 1) * 0.32;
+      ctx.strokeStyle = '#62e872';
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x, this.y - r);
+      ctx.quadraticCurveTo(this.x + this.w*0.5, this.y - this.h, this.x + this.w, this.y - r);
+      ctx.lineTo(this.x + this.w, this.y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+// Flat array of all bushes; rebuilt on each game start
+let allBushes = [];
+function initBushes() {
+  allBushes = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      allBushes.push(new Bush(r, c));
+}
+function getFreeBushes() { return allBushes.filter(b => b.isFree); }
+
+// ── PendingSpawn ───────────────────────────────────────────────────────────
+// Represents a reserved bush that has rustled but the entity hasn't appeared yet.
+// It occupies the bush so nothing else can spawn there during the rustle phase.
+class PendingSpawn {
+  constructor(bush, type) {
+    this.bush  = bush;
+    this.type  = type;
+    this.timer = RUSTLE_DELAY;
+    bush.occupant = this;
+  }
+  // Returns true when the delay has elapsed and an Entity should be created
+  tick(dt) { this.timer -= dt; return this.timer <= 0; }
+}
+
+// ── Entity ─────────────────────────────────────────────────────────────────
+const ENT_W = (W / COLS) * 0.70;
+const ENT_H = H * 0.165;
+
+class Entity {
+  constructor(bush, type, duration) {
+    this.type     = type;
+    this.duration = duration;
+    this.age      = 0;
+    this.alive    = true;
+    this.isHit    = false;
+    this.w = ENT_W; this.h = ENT_H;
+
+    // Bind to bush
+    this.bush  = bush;
+    this.x     = bush.x + (bush.w - ENT_W) / 2;
+    this.baseY = bush.y;
+    this.row   = bush.row;
+    bush.occupant = this;   // take over occupancy from PendingSpawn
+
+    // Movement state
+    // FINAL keeps the original fade jump behavior.
+    // MIGRATION adds short-range movement only, limited to 1–2 bush spaces.
+    this.jState    = 'idle'; // 'idle' | 'fadeOut' | 'fadeIn' | 'move'
+    this.jAlpha    = 1;
+    this.jToBush   = null;
+    this.jumpTimer = rnd(JUMP_ITV_MIN, JUMP_ITV_MAX);
+    this.moveTimer = this._nextMoveTimer();
+    this.moveAge   = 0;
+    this.moveDur   = 0.38;
+    this.moveFromX = this.x;
+    this.moveFromY = this.baseY;
+    this.moveToX   = this.x;
+    this.moveToY   = this.baseY;
+  }
+
+  // Pop-up progress 0→1 during first 0.22 s
+  get popAlpha()   { return clamp(this.age / 0.22, 0, 1); }
+  get popOffsetY() { return (1 - this.popAlpha) * 22; }
+
+  // Visual alpha combines pop-up progress with jump fade
+  get drawAlpha() {
+    if (this.jState === 'move') return this.popAlpha;
+    if (this.jState !== 'idle') return this.jAlpha;
+    return this.popAlpha;
+  }
+
+  // Only register clicks when fully popped up and not mid-jump
+  get clickable() {
+    return this.alive && !this.isHit && this.jState === 'idle' && this.popAlpha > 0.45;
+  }
+
+  update(dt) {
+    if (!this.alive) return;
+
+    // ── Migration short-range movement animation ────────────────────────
+    if (this.jState === 'move') {
+      this.moveAge += dt;
+      const p = clamp(this.moveAge / this.moveDur, 0, 1);
+      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      this.x = this.moveFromX + (this.moveToX - this.moveFromX) * ease;
+      this.baseY = this.moveFromY + (this.moveToY - this.moveFromY) * ease - Math.sin(p * Math.PI) * 10;
+
+      if (p >= 1) {
+        if (this.bush.occupant === this) this.bush.occupant = null;
+        this.bush  = this.jToBush;
+        this.x     = this.bush.x + (this.bush.w - this.w) / 2;
+        this.baseY = this.bush.y;
+        this.row   = this.bush.row;
+        this.jToBush = null;
+        this.jState  = 'idle';
+        this.moveTimer = this._nextMoveTimer();
+      }
+      return;
+    }
+
+    // ── Jump animation ─────────────────────────────────────────────────
+    if (this.jState === 'fadeOut') {
+      this.jAlpha = Math.max(0, this.jAlpha - dt * JUMP_SPEED);
+      if (this.jAlpha <= 0) {
+        // Release source bush, take destination
+        if (this.bush.occupant === this) this.bush.occupant = null;
+        this.bush  = this.jToBush;
+        this.x     = this.bush.x + (this.bush.w - this.w) / 2;
+        this.baseY = this.bush.y;
+        this.row   = this.bush.row;
+        this.bush.occupant = this;
+        this.bush.rustle();
+        playRustle();
+        this.jToBush  = null;
+        this.jState   = 'fadeIn';
+        this.jAlpha   = 0;
+      }
+      return; // don't age while transitioning
+    }
+    if (this.jState === 'fadeIn') {
+      this.jAlpha = Math.min(1, this.jAlpha + dt * JUMP_SPEED);
+      if (this.jAlpha >= 1) {
+        this.jState    = 'idle';
+        this.jAlpha    = 1;
+        this.jumpTimer = rnd(JUMP_ITV_MIN, JUMP_ITV_MAX);
+      }
+      return;
+    }
+
+    // ── Normal aging ────────────────────────────────────────────────────
+    this.age += dt;
+
+    const isAnimal = this.type !== T.ORCHID && this.type !== T.FIG;
+
+    // 大遷徙：只有動物會短距離移動，範圍限制在 1–2 格草叢。
+    // 最後七秒：所有動物都進入更高頻率移動。
+    if (gs && isAnimal && (gs.phase === PH.MIGRATION || gs.phase === PH.FINAL)) {
+      this.moveTimer -= dt;
+      if (this.moveTimer <= 0) this._tryMigrationMove();
+    }
+
+    // FINAL 原本的淡出跳動只保留給非動物物件，避免動物跳太遠造成混亂。
+    if (gs && gs.phase === PH.FINAL && !isAnimal) {
+      this.jumpTimer -= dt;
+      if (this.jumpTimer <= 0) this._tryJump();
+    }
+
+    // Expire
+    if (this.age >= this.duration) {
+      const isPlant = this.type === T.ORCHID || this.type === T.FIG;
+      this._die(isPlant && gs && gs.phase !== PH.NORMAL);
+    }
+  }
+
+  _nextMoveTimer() {
+    const isTabooAnimal = this.type === T.DOE || this.type === T.BOAR;
+
+    // 大遷徙後半段：所有動物都要更常移動，製造最後七秒壓迫感
+    if (gs && gs.phase === PH.FINAL) return rnd(0.18, 0.38);
+
+    // 大遷徙時，帶仔母鹿與帶仔山豬移動更頻繁
+    if (isTabooAnimal) return rnd(0.32, 0.62);
+
+    // 其他動物也會移動，但頻率略低，避免畫面太亂
+    return rnd(0.55, 0.95);
+  }
+
+  _tryMigrationMove() {
+    const candidates = getFreeBushes().filter(b => {
+      if (b === this.bush) return false;
+      const distance = Math.abs(b.row - this.bush.row) + Math.abs(b.col - this.bush.col);
+      return distance >= 1 && distance <= 2;
+    });
+
+    if (!candidates.length) {
+      this.moveTimer = this._nextMoveTimer();
+      return;
+    }
+
+    const tgt = candidates[Math.floor(Math.random() * candidates.length)];
+    tgt.occupant = this; // reserve destination immediately to prevent double occupancy
+    tgt.rustle();
+    playRustle();
+
+    this.jToBush = tgt;
+    this.jState = 'move';
+    this.moveAge = 0;
+    this.moveDur = rnd(0.32, 0.46);
+    this.moveFromX = this.x;
+    this.moveFromY = this.baseY;
+    this.moveToX = tgt.x + (tgt.w - this.w) / 2;
+    this.moveToY = tgt.y;
+  }
+
+  _tryJump() {
+    // Prefer a different row; fall back to any free bush
+    const free    = getFreeBushes().filter(b => b !== this.bush);
+    if (!free.length) { this.jumpTimer = 0.6; return; }
+    const diffRow = free.filter(b => b.row !== this.row);
+    const pool    = diffRow.length ? diffRow : free;
+    const tgt     = pool[Math.floor(Math.random() * pool.length)];
+    tgt.occupant  = this;   // reserve destination immediately
+    this.jToBush  = tgt;
+    this.jState   = 'fadeOut';
+    this.jAlpha   = 1;
+  }
+
+  _die(eaten = false) {
+    if (!this.alive) return;
+    this.alive = false;
+    if (this.bush   && this.bush.occupant   === this) this.bush.occupant   = null;
+    if (this.jToBush && this.jToBush.occupant === this) this.jToBush.occupant = null;
+    if (eaten) spawnFloat('🌿 啃食', this.x + this.w/2, this.baseY - this.h*0.6, '#a8d86a');
+  }
+
+  tryHit(px, py) {
+    if (!this.clickable) return false;
+    const off = this.popOffsetY;
+    if (px >= this.x && px <= this.x + this.w &&
+        py >= this.baseY - this.h - off && py <= this.baseY - off) {
+      this.isHit = true;
+      this._die(false);
+      return true;
+    }
+    return false;
+  }
+
+  draw() {
+    if (!this.alive) return;
+    const alpha = this.drawAlpha;
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    _drawEntity(this.type, this.x, this.baseY - this.popOffsetY, this.w, this.h);
+    ctx.restore();
+  }
+}
+
+// ── Entity drawing dispatch ────────────────────────────────────────────────
+function _drawEntity(type, x, bY, w, h) {
+  switch (type) {
+    case T.MUNTJAC: drawDeer(x, bY, w, h, '#d6b27a', '山羌',     false, false); break;
+    case T.BUCK:    drawDeer(x, bY, w, h, '#c4905a', '公鹿',     true,  false); break;
+    case T.DOE:     drawDeer(x, bY, w, h, '#aa7b5c', '帶仔母鹿', false, true);  break;
+    case T.BOAR:    drawBoar(x, bY, w, h, '帶仔山豬'); break;
+    case T.ORCHID:  drawOrchid(x, bY, w, h); break;
+    case T.FIG:     drawFig(x, bY, w, h);    break;
+  }
+}
+
+// ── Drawing: Deer ─────────────────────────────────────────────────────────
+function drawDeer(x, bottomY, w, h, color, label, antlers=false, hasYoung=false) {
+  ctx.save();
+  const bh = h*0.5, bw = w*0.7, bx = x+(w-bw)/2, by = bottomY-bh;
+  const bg = ctx.createLinearGradient(bx, by-bh, bx, bottomY);
+  bg.addColorStop(0, shade(color,-15)); bg.addColorStop(1, shade(color,5));
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
+
+  const hw = bw*0.35, hh = bh*0.7, hx = bx+bw-hw+2, hy = by-hh*0.3;
+  ctx.beginPath(); ctx.roundRect(hx, hy, hw, hh, 6); ctx.fill();
+
+  ctx.fillStyle = shade(color,-20);
+  ctx.beginPath();
+  ctx.ellipse(hx+hw*0.2, hy+hh*0.1,  4, 7, 0, 0, Math.PI*2);
+  ctx.ellipse(hx+hw*0.8, hy+hh*0.12, 4, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(hx+hw*0.7, hy+hh*0.35, 2, 0, Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle = shade(color,-30); ctx.lineWidth = 3;
+  for (let i=0; i<3; i++) {
+    const lx = bx + bw*(0.2+0.3*(i/2));
+    ctx.beginPath(); ctx.moveTo(lx, bottomY-bh*0.9); ctx.lineTo(lx, bottomY); ctx.stroke();
+  }
+
+  if (antlers) {
+    ctx.strokeStyle = '#c6b493'; ctx.lineWidth = 2;
+    const ax = hx+hw*0.4, ay = hy+hh*0.1;
+    ctx.beginPath();
+    ctx.moveTo(ax,ay); ctx.lineTo(ax-8,ay-16);
+    ctx.moveTo(ax,ay); ctx.lineTo(ax+8,ay-18);
+    ctx.stroke();
+  }
+
+  if (hasYoung) {
+    const fy = bottomY-bh*0.45, fx = bx-bw*0.3, fw = bw*0.4, fh = bh*0.45;
+    ctx.fillStyle = shade(color,-10);
+    ctx.beginPath();
+    ctx.roundRect(fx, fy, fw, fh, 5);
+    ctx.fill();
+    // fawn eyes
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(fx+fw*0.62, fy+fh*0.32, 1.8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(fx+fw*0.65, fy+fh*0.28, 0.7, 0, Math.PI*2); ctx.fill();
+  }
+
+  ctx.fillStyle = 'rgba(4,8,3,0.8)';
+  ctx.font = '10px Georgia'; ctx.textAlign = 'center';
+  ctx.fillText(label, x+w/2, bottomY-h-4);
+  ctx.restore();
+}
+
+// ── Drawing: Boar ─────────────────────────────────────────────────────────
+function drawBoar(x, bottomY, w, h, label) {
+  ctx.save();
+  const bh = h*0.55, bw = w*0.8, bx = x+(w-bw)/2, by = bottomY-bh;
+  const bg = ctx.createLinearGradient(bx, by-bh, bx, bottomY);
+  bg.addColorStop(0,'#332824'); bg.addColorStop(1,'#1e1512');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
+
+  const hw = bw*0.45, hh = bh*0.8, hx = bx-hw*0.1, hy = by-hh*0.1;
+  ctx.beginPath(); ctx.roundRect(hx, hy, hw, hh, 6); ctx.fill();
+
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(hx+hw*0.65, hy+hh*0.4, 2, 0, Math.PI*2); ctx.fill();
+
+  const sw = hw*0.45, sh = hh*0.35, sx = hx-sw*0.05, sy = hy+hh*0.35;
+  ctx.fillStyle = '#5b4742';
+  ctx.beginPath(); ctx.roundRect(sx, sy, sw, sh, 4); ctx.fill();
+
+  ctx.fillStyle = '#1a1210';
+  ctx.beginPath();
+  ctx.arc(sx+sw*0.3, sy+sh*0.6, 2, 0, Math.PI*2);
+  ctx.arc(sx+sw*0.7, sy+sh*0.6, 2, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = '#f1e4cf';
+  ctx.beginPath(); ctx.moveTo(sx+sw*0.2,sy+sh*0.8); ctx.lineTo(sx+sw*0.1,sy+sh*0.6); ctx.lineTo(sx+sw*0.3,sy+sh*0.7); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(sx+sw*0.8,sy+sh*0.8); ctx.lineTo(sx+sw*0.7,sy+sh*0.6); ctx.lineTo(sx+sw*0.9,sy+sh*0.7); ctx.closePath(); ctx.fill();
+
+  ctx.strokeStyle = '#201713'; ctx.lineWidth = 3;
+  for (let i=0; i<3; i++) {
+    const lx = bx+bw*(0.2+0.3*(i/2));
+    ctx.beginPath(); ctx.moveTo(lx, bottomY-bh*0.8); ctx.lineTo(lx, bottomY); ctx.stroke();
+  }
+
+  const pigW = bw*0.4, pigH = bh*0.4, px = bx+bw*0.5, py = bottomY-pigH;
+  ctx.fillStyle = '#5c4139';
+  ctx.beginPath(); ctx.roundRect(px, py, pigW, pigH, 4); ctx.fill();
+
+  ctx.strokeStyle = '#b79474'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(px+pigW*0.15, py+pigH*0.25); ctx.lineTo(px+pigW*0.8,  py+pigH*0.25);
+  ctx.moveTo(px+pigW*0.2,  py+pigH*0.45); ctx.lineTo(px+pigW*0.85, py+pigH*0.45);
+  ctx.stroke();
+
+  // piglet eyes
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(px+pigW*0.72, py+pigH*0.28, 2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.beginPath(); ctx.arc(px+pigW*0.75, py+pigH*0.23, 0.8, 0, Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = 'rgba(4,8,3,0.8)';
+  ctx.font = '10px Georgia'; ctx.textAlign = 'center';
+  ctx.fillText(label, x+w/2, bottomY-h-4);
+  ctx.restore();
+}
+
+// ── Drawing: Orchid ──────────────────────────────────────────────────────
+function drawOrchid(x, bottomY, w, h) {
+  ctx.save();
+  const cx = x + w/2;
+  ctx.strokeStyle = '#3b6b2e'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx, bottomY); ctx.lineTo(cx, bottomY-h*0.6); ctx.stroke();
+  ctx.fillStyle = '#3f7b36';
+  for (let i=0; i<3; i++) {
+    ctx.beginPath();
+    ctx.ellipse(cx-12, bottomY-8-i*6, 9, 4, -0.7, 0, Math.PI*2);
+    ctx.ellipse(cx+12, bottomY-10-i*6, 9, 4,  0.7, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#f4d868';
+  for (let i=0; i<4; i++) {
+    ctx.beginPath();
+    ctx.arc(cx+(i-1.5)*6, bottomY-h*0.65+(i%2)*4, 4, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ── Drawing: Fig ─────────────────────────────────────────────────────────
+function drawFig(x, bottomY, w, h) {
+  ctx.save();
+  const cx = x+w/2, cy = bottomY-h*0.7;
+  ctx.strokeStyle = '#5b432b'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(cx-18, cy-8); ctx.lineTo(cx+18, cy+8); ctx.stroke();
+  ctx.fillStyle = '#284c2f';
+  ctx.beginPath();
+  ctx.ellipse(cx-14, cy-6, 16, 10, -0.8, 0, Math.PI*2);
+  ctx.ellipse(cx+14, cy+6, 16, 10,  0.8, 0, Math.PI*2);
+  ctx.fill();
+  const fc = ['#b1362b','#da4b3a','#8b241c'];
+  for (let i=0; i<4; i++) {
+    ctx.fillStyle = fc[i%3];
+    ctx.beginPath(); ctx.arc(cx+(i-1.5)*8, cy+(i%2)*6, 5, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ── Background ───────────────────────────────────────────────────────────
+// Pre-generate star positions once
+const STARS = Array.from({length:55}, () => ({
+  x: Math.random() * 360,
+  y: Math.random() * 200,
+  r: 0.5 + Math.random() * 1.1,
+  a: 0.3 + Math.random() * 0.65,
+}));
+
+// Tree definitions: [cx, trunkBaseY, trunkH, trunkW, canopyClusters]
+const BG_TREES = [
+  { x:W*0.12, ty:H*0.52, th:H*0.22, tw:6,
+    clusters:[{ox:0,oy:-0.75,rx:34,ry:28},{ox:-22,oy:-0.55,rx:26,ry:20},{ox:24,oy:-0.58,rx:28,ry:22},{ox:10,oy:-0.95,rx:20,ry:16}] },
+  { x:W*0.50, ty:H*0.50, th:H*0.24, tw:7,
+    clusters:[{ox:0,oy:-0.78,rx:38,ry:30},{ox:-25,oy:-0.58,rx:28,ry:22},{ox:28,oy:-0.60,rx:30,ry:24},{ox:-8,oy:-0.98,rx:22,ry:17},{ox:16,oy:-0.92,rx:18,ry:14}] },
+  { x:W*0.86, ty:H*0.53, th:H*0.21, tw:6,
+    clusters:[{ox:0,oy:-0.74,rx:32,ry:26},{ox:-20,oy:-0.54,rx:24,ry:19},{ox:22,oy:-0.56,rx:26,ry:21},{ox:6,oy:-0.92,rx:18,ry:14}] },
+];
+
+function drawBgTree(tree, moonX, moonY) {
+  const { x, ty, th, tw, clusters } = tree;
+  // trunk shadow (cast left-ish from moon position)
+  const sdx = (x - moonX) * 0.18, sdy = 6;
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.moveTo(x - tw*0.5 + sdx, ty + sdy);
+  ctx.lineTo(x + tw*0.5 + sdx, ty + sdy);
+  ctx.lineTo(x + tw*0.3 + sdx, ty - th*0.5 + sdy);
+  ctx.lineTo(x - tw*0.3 + sdx, ty - th*0.5 + sdy);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // trunk — layered strokes for bark texture
+  const tg = ctx.createLinearGradient(x-tw, ty-th, x+tw, ty);
+  tg.addColorStop(0, '#2a1f10'); tg.addColorStop(0.4,'#3d2c14'); tg.addColorStop(1,'#1a1208');
+  ctx.strokeStyle = tg; ctx.lineWidth = tw;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, ty); ctx.lineTo(x, ty-th); ctx.stroke();
+  // bark streaks
+  ctx.strokeStyle = 'rgba(80,55,20,0.35)'; ctx.lineWidth = 1.5;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x + i*tw*0.28, ty);
+    ctx.bezierCurveTo(x + i*tw*0.35, ty-th*0.4, x + i*tw*0.2, ty-th*0.7, x + i*tw*0.1, ty-th);
+    ctx.stroke();
+  }
+
+  // canopy shadow blobs under tree
+  ctx.save();
+  ctx.globalAlpha = 0.13;
+  clusters.forEach(cl => {
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(x + cl.ox + sdx*0.5, ty + 8, cl.rx*0.8, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+
+  // canopy — back clusters (darker)
+  clusters.slice(1).forEach(cl => {
+    const cy = ty + th * cl.oy;
+    const cg = ctx.createRadialGradient(x+cl.ox-cl.rx*0.3, cy-cl.ry*0.3, 2, x+cl.ox, cy, cl.rx);
+    cg.addColorStop(0,'#1e4520'); cg.addColorStop(0.6,'#142f16'); cg.addColorStop(1,'#0b1e0c');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.ellipse(x+cl.ox, cy, cl.rx, cl.ry, 0, 0, Math.PI*2); ctx.fill();
+  });
+  // canopy — front main cluster (brighter, moonlit edge)
+  const mc = clusters[0];
+  const mcy = ty + th * mc.oy;
+  const mcg = ctx.createRadialGradient(x+mc.ox-mc.rx*0.35, mcy-mc.ry*0.4, 3, x+mc.ox, mcy, mc.rx);
+  mcg.addColorStop(0,'#2a5c2e'); mcg.addColorStop(0.55,'#1a3e1e'); mcg.addColorStop(1,'#0e2410');
+  ctx.fillStyle = mcg;
+  ctx.beginPath(); ctx.ellipse(x+mc.ox, mcy, mc.rx, mc.ry, 0, 0, Math.PI*2); ctx.fill();
+  // moonlit rim highlight on canopy top-left
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = '#8fcc9a'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.ellipse(x+mc.ox, mcy, mc.rx, mc.ry, 0, Math.PI*1.1, Math.PI*1.7); ctx.stroke();
+  ctx.restore();
+
+  // leaf texture dots
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  clusters.forEach(cl => {
+    const cy = ty + th * cl.oy;
+    for (let d = 0; d < 5; d++) {
+      const da = (d/5)*Math.PI*2, dr = cl.rx*0.55;
+      ctx.fillStyle = d%2===0 ? '#4aaa50' : '#2a6030';
+      ctx.beginPath();
+      ctx.arc(x+cl.ox+Math.cos(da)*dr, cy+Math.sin(da)*dr*0.7, 3, 0, Math.PI*2);
+      ctx.fill();
+    }
+  });
+  ctx.restore();
+}
+
+function drawGrassTuft(gx, gy, scale=1, bright=false) {
+  const blades = 6;
+  ctx.strokeStyle = bright ? '#3a7040' : '#1e4020';
+  ctx.lineWidth = 1.2 * scale;
+  for (let b = 0; b < blades; b++) {
+    const ox = (b - blades/2) * 3.5 * scale;
+    const h2 = (7 + Math.sin(b*1.7)*3) * scale;
+    const curve = (b%2===0 ? 1 : -1) * 3 * scale;
+    ctx.beginPath();
+    ctx.moveTo(gx+ox, gy);
+    ctx.quadraticCurveTo(gx+ox+curve, gy-h2*0.6, gx+ox+curve*0.5, gy-h2);
+    ctx.stroke();
+  }
+}
+
+function drawBackground() {
+  // ── Sky ──
+  const skyG = ctx.createLinearGradient(0, 0, 0, H*0.55);
+  skyG.addColorStop(0,'#141e1c'); skyG.addColorStop(0.6,'#0d1812'); skyG.addColorStop(1,'#081009');
+  ctx.fillStyle = skyG; ctx.fillRect(0, 0, W, H);
+
+  // ── Moon ──
+  const moonX = W*0.78, moonY = H*0.09;
+  const moonGlow = ctx.createRadialGradient(moonX, moonY, 4, moonX, moonY, 55);
+  moonGlow.addColorStop(0,'rgba(230,220,160,0.22)');
+  moonGlow.addColorStop(0.4,'rgba(180,200,140,0.08)');
+  moonGlow.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = moonGlow; ctx.beginPath(); ctx.arc(moonX, moonY, 55, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d8ceaa';
+  ctx.beginPath(); ctx.arc(moonX, moonY, 13, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#c4ba90';
+  ctx.beginPath(); ctx.arc(moonX-3, moonY-2, 4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(moonX+5, moonY+3, 2.5, 0, Math.PI*2); ctx.fill();
+
+  // ── Stars ──
+  STARS.forEach(s => {
+    ctx.save();
+    ctx.globalAlpha = s.a * (0.7 + 0.3 * Math.sin(performance.now()*0.001 + s.x));
+    ctx.fillStyle = '#e8e4cc';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+
+  // ── Distant mountain silhouette ──
+  ctx.fillStyle = '#0c1610';
+  ctx.beginPath();
+  ctx.moveTo(0, H*0.46);
+  ctx.lineTo(W*0.08, H*0.38); ctx.lineTo(W*0.18, H*0.44);
+  ctx.lineTo(W*0.28, H*0.34); ctx.lineTo(W*0.38, H*0.40);
+  ctx.lineTo(W*0.50, H*0.30); ctx.lineTo(W*0.58, H*0.36);
+  ctx.lineTo(W*0.68, H*0.32); ctx.lineTo(W*0.78, H*0.38);
+  ctx.lineTo(W*0.88, H*0.28); ctx.lineTo(W*0.96, H*0.36);
+  ctx.lineTo(W, H*0.33);
+  ctx.lineTo(W, H); ctx.lineTo(0, H);
+  ctx.closePath(); ctx.fill();
+
+  // ── Mid-ground layer ──
+  const midG = ctx.createLinearGradient(0, H*0.44, 0, H*0.62);
+  midG.addColorStop(0,'#0f1c12'); midG.addColorStop(1,'#0a1309');
+  ctx.fillStyle = midG; ctx.fillRect(0, H*0.44, W, H*0.18);
+
+  // ── Trees ──
+  BG_TREES.forEach(t => drawBgTree(t, moonX, moonY));
+
+  // ── Ground base ──
+  const groundG = ctx.createLinearGradient(0, H*0.56, 0, H);
+  groundG.addColorStop(0,'#0b1a0e'); groundG.addColorStop(0.3,'#060e07'); groundG.addColorStop(1,'#020503');
+  ctx.fillStyle = groundG; ctx.fillRect(0, H*0.56, W, H*0.44);
+
+  // ── Ground edge grass line ──
+  const grassY = H*0.575;
+  for (let gx = 8; gx < W; gx += 14) {
+    const bright = gx > moonX - 40 && gx < moonX + 40;
+    drawGrassTuft(gx, grassY, 0.9 + Math.sin(gx)*0.15, bright);
+  }
+
+  // ── Subtle moonlight pool on ground ──
+  const poolG = ctx.createRadialGradient(W/2, H*0.7, 10, W/2, H*0.65, 120);
+  poolG.addColorStop(0,'rgba(180,200,140,0.06)');
+  poolG.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = poolG; ctx.fillRect(0, H*0.55, W, H*0.45);
+
+  // ── Bush row ground shadow lines ──
+  [H*0.76, H*0.67, H*0.59].forEach((ry, i) => {
+    const alpha = 0.18 - i*0.04;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(W/2, ry+4, W*0.45, 7, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+// ── Migration overlay text ─────────────────────────────────────────────
+function drawMigrationText(alpha) {
+  if (alpha <= 0) return;
+  const t = performance.now() * 0.001;
+  const shakeX = Math.sin(t * 75) * 4.5 + (Math.random() - 0.5) * 5;
+  const shakeY = Math.cos(t * 58) * 2.8 + (Math.random() - 0.5) * 3;
+  const alarmPulse = 0.45 + 0.55 * Math.abs(Math.sin(t * 10));
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(shakeX * alpha, shakeY * alpha);
+  ctx.rotate(Math.sin(t * 42) * 0.018 * alpha);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  ctx.shadowColor = '#ff3b2e';
+  ctx.shadowBlur = 24 + alarmPulse * 26;
+  ctx.font = 'bold 64px Georgia';
+  ctx.fillStyle = `rgba(255,70,45,${0.28 + alarmPulse * 0.25})`;
+  ctx.fillText('大遷徙', W/2 + 3, H/2 - 16);
+
+  ctx.shadowColor = '#c8900a'; ctx.shadowBlur = 60;
+  ctx.fillStyle = '#f0c858';
+  ctx.fillText('大遷徙', W/2, H/2 - 18);
+
+  ctx.shadowBlur = 0;
+  ctx.font = '15px Georgia';
+  ctx.fillStyle = 'rgba(245,225,150,0.90)';
+  ctx.fillText('動物大遷徙開始了！', W/2, H/2 + 34);
+  ctx.restore();
+}
+
+// ── Float messages (+5 / -15 / +3s / 🌿 啃食) ────────────────────────
+let floatMsgs = [];
+function spawnFloat(text, x, y, color, dur=0.9) {
+  floatMsgs.push({ text, x, y, color, age:0, dur });
+}
+function tickFloats(dt) {
+  floatMsgs = floatMsgs.filter(f => { f.age += dt; return f.age < f.dur; });
+}
+function drawFloats() {
+  for (const f of floatMsgs) {
+    const p = f.age / f.dur;
+    ctx.save();
+    ctx.globalAlpha = p < 0.72 ? 1 : 1 - (p - 0.72) / 0.28;
+    ctx.textAlign = 'center'; ctx.font = 'bold 13px Georgia';
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x, f.y - f.age * 28);
+    ctx.restore();
+  }
+}
+
+// ── Click FX ─────────────────────────────────────────────────────────────
+let clickFX = [];
+function addClickFX(x, y) { clickFX.push({ x, y, age:0, dur:0.38 }); }
+function tickClickFX(dt) {
+  clickFX = clickFX.filter(c => { c.age += dt; return c.age < c.dur; });
+}
+function drawClickFX() {
+  for (const c of clickFX) {
+    const p = c.age / c.dur;
+    ctx.save();
+    ctx.globalAlpha = 1 - p;
+    ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(c.x, c.y, 14*(1+p*0.3), 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(c.x-20, c.y); ctx.lineTo(c.x+20, c.y);
+    ctx.moveTo(c.x, c.y-20); ctx.lineTo(c.x, c.y+20);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ── Spawn logic ───────────────────────────────────────────────────────────
+function rollType(phase) {
+  const r = Math.random();
+  if (phase === PH.NORMAL) {
+    // 50% positive animals, 30% taboo, 20% plants
+    if (r < 0.50) return Math.random() < 0.5 ? T.MUNTJAC : T.BUCK;
+    if (r < 0.80) return Math.random() < 0.5 ? T.DOE     : T.BOAR;
+    return Math.random() < 0.5 ? T.ORCHID : T.FIG;
+  }
+  // MIGRATION / FINAL: 53% taboo, 22% positive, 25% plants
+  if (r < 0.22) return Math.random() < 0.5 ? T.MUNTJAC : T.BUCK;
+  if (r < 0.75) return Math.random() < 0.5 ? T.DOE     : T.BOAR;
+  return Math.random() < 0.5 ? T.ORCHID : T.FIG;
+}
+
+function getEntityDuration(type, phase) {
+  const isPlant = (type === T.ORCHID || type === T.FIG);
+  const table   = isPlant ? PLANT_DUR : ANIMAL_DUR;
+  const [lo, hi] = table[phase];
+  return rnd(lo, hi);
+}
+
+function scheduleSpawn() {
+  const free = getFreeBushes();
+  if (!free.length) return;
+  const bush = free[Math.floor(Math.random() * free.length)];
+  const type = rollType(gs.phase);
+  pending.push(new PendingSpawn(bush, type));
+  bush.rustle();
+  playRustle();
+}
+
+// ── Game state object (reset each game) ──────────────────────────────────
+let gs       = null;
+let pending  = [];
+let entities = [];
+
+// ── Main loop ─────────────────────────────────────────────────────────────
+function loop(ts) {
+  if (!gs || gs.mode !== 'playing') return;
+  const dt = Math.min((ts - gs.lastTs) / 1000, 0.05);
+  gs.lastTs = ts;
+
+  // Timer
+  gs.timeLeft -= dt;
+  if (gs.timeLeft <= 0) {
+    gs.timeLeft = 0;
+    hudTime.textContent = '0';
+    render();
+    endGame();
+    return;
+  }
+  hudTime.textContent      = Math.ceil(gs.timeLeft);
+  pillTime.className       = 'pill' + (gs.timeLeft <= 8 ? ' warn' : '');
+
+  // ── Phase transitions ─────────────────────────────────────────────────
+  if (!gs.migTriggered && gs.timeLeft <= 15) {
+    gs.migTriggered = true;
+    gs.phase        = PH.MIGRATION;
+    gs.migState     = 'in';
+    gs.migAge       = 0;
+    gs.migAlpha     = 0;
+  }
+  if (!gs.finalTriggered && gs.timeLeft <= 7) {
+    gs.finalTriggered = true;
+    gs.phase          = PH.FINAL;
+
+    // 最後七秒：讓場上所有動物立刻準備移動
+    entities.forEach(ent => {
+      const isAnimal = ent.type !== T.ORCHID && ent.type !== T.FIG;
+      if (ent.alive && isAnimal && ent.jState === 'idle') ent.moveTimer = 0;
+    });
+  }
+
+  // ── 大遷徙 text animation (fade-in 0.5s, hold 2s, fade-out 0.5s = 3s) ──
+  if (gs.migState !== 'done') {
+    gs.migAge += dt;
+    const FI=0.5, HOLD=2.0, FO=0.5;
+    if      (gs.migState === 'in')   { gs.migAlpha = Math.min(gs.migAge/FI, 1);        if (gs.migAge >= FI)   { gs.migState='hold'; gs.migAge=0; } }
+    else if (gs.migState === 'hold') { gs.migAlpha = 1;                                if (gs.migAge >= HOLD) { gs.migState='out';  gs.migAge=0; } }
+    else if (gs.migState === 'out')  { gs.migAlpha = Math.max(1-gs.migAge/FO, 0);      if (gs.migAge >= FO)   { gs.migState='done'; gs.migAlpha=0; } }
+  }
+
+  // ── Resolve pending spawns ────────────────────────────────────────────
+  pending = pending.filter(ps => {
+    if (ps.tick(dt)) {
+      // Entity constructor takes over bush.occupant from PendingSpawn
+      entities.push(new Entity(ps.bush, ps.type, getEntityDuration(ps.type, gs.phase)));
+      return false;
+    }
+    return true;
+  });
+
+  // ── Update entities ───────────────────────────────────────────────────
+  for (const e of entities) e.update(dt);
+  entities = entities.filter(e => e.alive);
+
+  // ── Update bushes ─────────────────────────────────────────────────────
+  for (const b of allBushes) b.update(dt);
+
+  // ── Spawn timer ───────────────────────────────────────────────────────
+  gs.spawnT -= dt;
+  if (gs.spawnT <= 0) {
+    scheduleSpawn();
+    const [lo, hi] = SPAWN_RANGE[gs.phase];
+    gs.spawnT = rnd(lo, hi);
+  }
+
+  // ── FX ────────────────────────────────────────────────────────────────
+  tickFloats(dt);
+  tickClickFX(dt);
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+
+  // Draw rows back → front (row 2 → row 0), bushes then idle entities per row
+  for (let r = ROWS - 1; r >= 0; r--) {
+    for (const b of allBushes) if (b.row === r) b.draw();
+    for (const e of entities)  if (e.alive && e.row === r && e.jState === 'idle') e.draw();
+  }
+  // Jumping entities render above everything (they are semi-transparent mid-fade)
+  for (const e of entities) if (e.alive && e.jState !== 'idle') e.draw();
+
+  drawClickFX();
+  drawFloats();
+  if (gs && gs.migAlpha > 0) drawMigrationText(gs.migAlpha);
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────
+let lblTimeout = null;
+function showLabel(text) {
+  floatLbl.textContent = text;
+  floatLbl.classList.add('visible');
+  if (lblTimeout) clearTimeout(lblTimeout);
+  lblTimeout = setTimeout(() => floatLbl.classList.remove('visible'), 1000);
+}
+
+function handlePointer(evt) {
+  if (!gs || gs.mode !== 'playing') return;
+  initAudio();
+  evt.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const src  = evt.touches ? evt.touches[0] : evt;
+  const px   = (src.clientX - rect.left) * (W / rect.width);
+  const py   = (src.clientY - rect.top)  * (H / rect.height);
+
+  addClickFX(px, py);
+
+  // Hit detection: sweep front-to-back (row 0 first)
+  let hit = null;
+  outer: for (let r = 0; r < ROWS; r++) {
+    for (const e of entities) {
+      if (e.row === r && e.tryHit(px, py)) { hit = e; break outer; }
+    }
+  }
+  if (!hit) return;
+
+  switch (hit.type) {
+    case T.MUNTJAC:
+    case T.BUCK:
+      gs.score += 5;
+      playGoodHit();
+      spawnFloat('+5', px, py, '#9fe29d');
+      break;
+    case T.DOE:
+    case T.BOAR:
+      gs.score = Math.max(0, gs.score - 15);
+      gs.penaltyScore += 15;
+      playBadHit();
+      spawnFloat('-15', px, py, '#ff9b9b');
+      break;
+    case T.ORCHID:
+      gs.timeLeft += 3;
+      playPlant();
+      showLabel('金草石斛 +3s');
+      spawnFloat('+3s', px, py, '#ffe38a');
+      break;
+    case T.FIG:
+      gs.timeLeft += 3;
+      playPlant();
+      showLabel('雀榕 +3s');
+      spawnFloat('+3s', px, py, '#ffe38a');
+      break;
+  }
+  hudScore.textContent = gs.score;
+}
+
+canvas.addEventListener('click',      handlePointer);
+canvas.addEventListener('touchstart', handlePointer, { passive: false });
+
+// ── Game control ──────────────────────────────────────────────────────────
+function startGame() {
+  initAudio();
+  initBushes();
+  pending   = [];
+  entities  = [];
+  floatMsgs = [];
+  clickFX   = [];
+
+  gs = {
+    mode:           'playing',
+    phase:          PH.NORMAL,
+    score:          0,
+    penaltyScore:   0,
+    timeLeft:       30,
+    spawnT:         0.4,
+    lastTs:         performance.now(),
+    migTriggered:   false,
+    finalTriggered: false,
+    migState:       'done',
+    migAge:         0,
+    migAlpha:       0,
+  };
+
+  hudScore.textContent = '0';
+  hudTime.textContent  = '30';
+  pillTime.className   = 'pill';
+  floatLbl.classList.remove('visible');
+  ovStart.classList.remove('visible');
+  ovNight.classList.remove('visible');
+  ovTut1.classList.remove('visible');
+  ovTut2.classList.remove('visible');
+  ovTut3.classList.remove('visible');
+  ovResult.classList.remove('visible');
+
+  requestAnimationFrame(loop);
+}
+
+function endGame() {
+  gs.mode = 'ended';
+  resTitle.textContent = gs.score >= 50
+    ? `${currentPlayerName}，你是 suaemi 大勇士！`
+    : '還差一點，再回山裡磨練吧。';
+  resScore.textContent = `${currentPlayerName} 最終分數：${gs.score} 分｜扣分：${gs.penaltyScore} 分`;
+
+  // Show result screen immediately with loading state
+  document.getElementById('leaderboard-list').innerHTML =
+    '<div style="color:#666;text-align:center;font-size:12px">載入排行榜中…</div>';
+  ovResult.classList.add('visible');
+
+  // Submit score then refresh leaderboard
+  const myName = currentPlayerName, myScore = gs.score, myPenaltyScore = gs.penaltyScore, gameId = makeGameId();
+  saveLocalScore(myName, myScore, myPenaltyScore, gameId);
+  submitScore(myName, myScore, myPenaltyScore, gameId).then(() => fetchLeaderboard()).then(entries => {
+    renderLeaderboard(entries, myName, myScore, myPenaltyScore);
+  }).catch(() => {
+    try {
+      const local = getLocalLeaderboard();
+      renderLeaderboard(local, myName, myScore, myPenaltyScore);
+    } catch(e) {
+      document.getElementById('leaderboard-list').innerHTML =
+        '<div style="color:#888;text-align:center;font-size:12px">排行榜暫時無法載入</div>';
+    }
+  });
+}
+
+// ── Initialise static scene ───────────────────────────────────────────────
+initBushes();
+render();
+
+})();
+</script>
+</body>
+</html>
