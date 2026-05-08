@@ -39,7 +39,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0c1410;font-family:
 <body>
 <div id="game-root">
   <div id="hud">
-    <div class="pill" id="pill-time">時間：<span id="time-label">30</span>s</div>
+    <div class="pill" id="pill-time">時間：<span id="time-label">60</span>s</div>
     <div class="pill">分數：<span id="score-label">0</span></div>
   </div>
   <canvas id="game-canvas"></canvas>
@@ -47,7 +47,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0c1410;font-family:
   <div id="overlay-start" class="overlay visible">
     <div class="overlay-panel">
       <h1>鄒路看鹿</h1>
-      <p style="font-size:13px;color:#b8d4a4;line-height:1.6;margin:6px 0 14px">在鄒族的山林中，辨別獵物與禁忌。<br>30 秒內累積 <strong style="color:#ffe38a">50 分</strong> 以上成為 suaemi 大勇士！</p>
+      <p style="font-size:13px;color:#b8d4a4;line-height:1.6;margin:6px 0 14px">在鄒族的山林中，辨別獵物與禁忌。<br>60 秒內累積 <strong style="color:#ffe38a">50 分</strong> 以上成為 suaemi 大勇士！</p>
       <div style="margin-bottom:14px">
         <label style="font-size:12px;color:#8dba7a;display:block;margin-bottom:6px">輸入你的獵人名號（最多 10 字）</label>
         <input id="player-name" type="text" maxlength="10" placeholder="ZOUQI"
@@ -470,6 +470,7 @@ document.getElementById('btn-restart').addEventListener('click', () => {
 // ── Types & Phases ────────────────────────────────────────────────────────
 const T = { MUNTJAC:'m', BUCK:'b', DOE:'d', BOAR:'p', ORCHID:'o', FIG:'f' };
 const PH = { NORMAL:0, MIGRATION:1, FINAL:2 };
+const TOTAL_GAME_TIME = 60;
 
 // Spawn interval [min,max] in seconds — migration/final are 25% faster
 const SPAWN_RANGE = {
@@ -955,9 +956,6 @@ function drawDeer(x, bottomY, w, h, color, label, antlers=false, hasYoung=false)
     ctx.beginPath(); ctx.arc(fx+fw*0.65, fy+fh*0.28, 0.7, 0, Math.PI*2); ctx.fill();
   }
 
-  ctx.fillStyle = 'rgba(4,8,3,0.8)';
-  ctx.font = '10px Georgia'; ctx.textAlign = 'center';
-  ctx.fillText(label, x+w/2, bottomY-h-4);
   ctx.restore();
 }
 
@@ -1012,9 +1010,6 @@ function drawBoar(x, bottomY, w, h, label) {
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.beginPath(); ctx.arc(px+pigW*0.75, py+pigH*0.23, 0.8, 0, Math.PI*2); ctx.fill();
 
-  ctx.fillStyle = 'rgba(4,8,3,0.8)';
-  ctx.font = '10px Georgia'; ctx.textAlign = 'center';
-  ctx.fillText(label, x+w/2, bottomY-h-4);
   ctx.restore();
 }
 
@@ -1172,36 +1167,96 @@ function drawGrassTuft(gx, gy, scale=1, bright=false) {
   }
 }
 
+function getVisualStage() {
+  if (!gs || gs.mode !== 'playing') return 'morning';
+  const elapsed = TOTAL_GAME_TIME - gs.timeLeft;
+  if (elapsed >= 45 || gs.phase === PH.MIGRATION || gs.phase === PH.FINAL) return 'night';
+  if (elapsed >= 25) return 'dusk';
+  return 'morning';
+}
+
 function drawBackground() {
+  const stage = getVisualStage();
+  const palette = {
+    morning: {
+      sky: ['#cce8df', '#9fceb7', '#5f8b66'],
+      mountain: '#6f8f69',
+      mid: ['#79a46f', '#476d43'],
+      ground: ['#4f7a3c', '#24451f', '#102310'],
+      lightX: W * 0.18,
+      lightY: H * 0.11,
+      lightCore: '#fff1a8',
+      glow0: 'rgba(255,230,145,0.40)',
+      glow1: 'rgba(255,230,145,0)',
+      starAlpha: 0,
+      pool0: 'rgba(255,232,150,0.10)',
+      grassBright: '#5f9a54'
+    },
+    dusk: {
+      sky: ['#4a3145', '#b06a4d', '#dd9b57'],
+      mountain: '#30351f',
+      mid: ['#3f4b2f', '#202817'],
+      ground: ['#314320', '#15200e', '#070d06'],
+      lightX: W * 0.80,
+      lightY: H * 0.18,
+      lightCore: '#ffb45f',
+      glow0: 'rgba(255,135,70,0.34)',
+      glow1: 'rgba(255,120,60,0)',
+      starAlpha: 0.10,
+      pool0: 'rgba(255,150,80,0.08)',
+      grassBright: '#80683d'
+    },
+    night: {
+      sky: ['#141e1c', '#0d1812', '#081009'],
+      mountain: '#0c1610',
+      mid: ['#0f1c12', '#0a1309'],
+      ground: ['#0b1a0e', '#060e07', '#020503'],
+      lightX: W * 0.78,
+      lightY: H * 0.09,
+      lightCore: '#d8ceaa',
+      glow0: 'rgba(230,220,160,0.22)',
+      glow1: 'rgba(0,0,0,0)',
+      starAlpha: 1,
+      pool0: 'rgba(180,200,140,0.06)',
+      grassBright: '#3a7040'
+    }
+  }[stage];
+
   // ── Sky ──
   const skyG = ctx.createLinearGradient(0, 0, 0, H*0.55);
-  skyG.addColorStop(0,'#141e1c'); skyG.addColorStop(0.6,'#0d1812'); skyG.addColorStop(1,'#081009');
+  skyG.addColorStop(0, palette.sky[0]);
+  skyG.addColorStop(0.6, palette.sky[1]);
+  skyG.addColorStop(1, palette.sky[2]);
   ctx.fillStyle = skyG; ctx.fillRect(0, 0, W, H);
 
-  // ── Moon ──
-  const moonX = W*0.78, moonY = H*0.09;
-  const moonGlow = ctx.createRadialGradient(moonX, moonY, 4, moonX, moonY, 55);
-  moonGlow.addColorStop(0,'rgba(230,220,160,0.22)');
-  moonGlow.addColorStop(0.4,'rgba(180,200,140,0.08)');
-  moonGlow.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle = moonGlow; ctx.beginPath(); ctx.arc(moonX, moonY, 55, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#d8ceaa';
-  ctx.beginPath(); ctx.arc(moonX, moonY, 13, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#c4ba90';
-  ctx.beginPath(); ctx.arc(moonX-3, moonY-2, 4, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(moonX+5, moonY+3, 2.5, 0, Math.PI*2); ctx.fill();
+  // ── Sun / Moon ──
+  const lightX = palette.lightX, lightY = palette.lightY;
+  const lightGlow = ctx.createRadialGradient(lightX, lightY, 4, lightX, lightY, stage === 'morning' ? 80 : 55);
+  lightGlow.addColorStop(0, palette.glow0);
+  lightGlow.addColorStop(1, palette.glow1);
+  ctx.fillStyle = lightGlow; ctx.beginPath(); ctx.arc(lightX, lightY, stage === 'morning' ? 80 : 55, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = palette.lightCore;
+  ctx.beginPath(); ctx.arc(lightX, lightY, stage === 'morning' ? 17 : 13, 0, Math.PI*2); ctx.fill();
 
-  // ── Stars ──
-  STARS.forEach(s => {
-    ctx.save();
-    ctx.globalAlpha = s.a * (0.7 + 0.3 * Math.sin(performance.now()*0.001 + s.x));
-    ctx.fillStyle = '#e8e4cc';
-    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-  });
+  if (stage === 'night') {
+    ctx.fillStyle = '#c4ba90';
+    ctx.beginPath(); ctx.arc(lightX-3, lightY-2, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(lightX+5, lightY+3, 2.5, 0, Math.PI*2); ctx.fill();
+  }
+
+  // ── Stars：早上不出現，黃昏很淡，夜晚最明顯 ──
+  if (palette.starAlpha > 0) {
+    STARS.forEach(s => {
+      ctx.save();
+      ctx.globalAlpha = palette.starAlpha * s.a * (0.7 + 0.3 * Math.sin(performance.now()*0.001 + s.x));
+      ctx.fillStyle = '#e8e4cc';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+  }
 
   // ── Distant mountain silhouette ──
-  ctx.fillStyle = '#0c1610';
+  ctx.fillStyle = palette.mountain;
   ctx.beginPath();
   ctx.moveTo(0, H*0.46);
   ctx.lineTo(W*0.08, H*0.38); ctx.lineTo(W*0.18, H*0.44);
@@ -1215,35 +1270,56 @@ function drawBackground() {
 
   // ── Mid-ground layer ──
   const midG = ctx.createLinearGradient(0, H*0.44, 0, H*0.62);
-  midG.addColorStop(0,'#0f1c12'); midG.addColorStop(1,'#0a1309');
+  midG.addColorStop(0, palette.mid[0]); midG.addColorStop(1, palette.mid[1]);
   ctx.fillStyle = midG; ctx.fillRect(0, H*0.44, W, H*0.18);
 
   // ── Trees ──
-  BG_TREES.forEach(t => drawBgTree(t, moonX, moonY));
+  ctx.save();
+  if (stage === 'morning') ctx.globalAlpha = 0.82;
+  if (stage === 'dusk') ctx.globalAlpha = 0.92;
+  BG_TREES.forEach(t => drawBgTree(t, lightX, lightY));
+  ctx.restore();
+
+  // 早晨和黃昏額外加一層薄光，讓整體真的跳出夜晚感
+  if (stage === 'morning') {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = 'rgba(120,170,110,0.16)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  } else if (stage === 'dusk') {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = 'rgba(185,90,45,0.12)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
 
   // ── Ground base ──
   const groundG = ctx.createLinearGradient(0, H*0.56, 0, H);
-  groundG.addColorStop(0,'#0b1a0e'); groundG.addColorStop(0.3,'#060e07'); groundG.addColorStop(1,'#020503');
+  groundG.addColorStop(0, palette.ground[0]);
+  groundG.addColorStop(0.3, palette.ground[1]);
+  groundG.addColorStop(1, palette.ground[2]);
   ctx.fillStyle = groundG; ctx.fillRect(0, H*0.56, W, H*0.44);
 
   // ── Ground edge grass line ──
   const grassY = H*0.575;
   for (let gx = 8; gx < W; gx += 14) {
-    const bright = gx > moonX - 40 && gx < moonX + 40;
+    const bright = gx > lightX - 45 && gx < lightX + 45;
     drawGrassTuft(gx, grassY, 0.9 + Math.sin(gx)*0.15, bright);
   }
 
-  // ── Subtle moonlight pool on ground ──
+  // ── Light pool on ground ──
   const poolG = ctx.createRadialGradient(W/2, H*0.7, 10, W/2, H*0.65, 120);
-  poolG.addColorStop(0,'rgba(180,200,140,0.06)');
+  poolG.addColorStop(0, palette.pool0);
   poolG.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle = poolG; ctx.fillRect(0, H*0.55, W, H*0.45);
 
   // ── Bush row ground shadow lines ──
   [H*0.76, H*0.67, H*0.59].forEach((ry, i) => {
-    const alpha = 0.18 - i*0.04;
+    const alpha = stage === 'morning' ? 0.11 - i*0.025 : 0.18 - i*0.04;
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = Math.max(alpha, 0.04);
     ctx.fillStyle = '#000';
     ctx.beginPath();
     ctx.ellipse(W/2, ry+4, W*0.45, 7, 0, 0, Math.PI*2);
@@ -1534,7 +1610,7 @@ function startGame() {
     phase:          PH.NORMAL,
     score:          0,
     penaltyScore:   0,
-    timeLeft:       30,
+    timeLeft:       TOTAL_GAME_TIME,
     spawnT:         0.4,
     lastTs:         performance.now(),
     migTriggered:   false,
@@ -1545,7 +1621,7 @@ function startGame() {
   };
 
   hudScore.textContent = '0';
-  hudTime.textContent  = '30';
+  hudTime.textContent  = String(TOTAL_GAME_TIME);
   pillTime.className   = 'pill';
   floatLbl.classList.remove('visible');
   ovStart.classList.remove('visible');
