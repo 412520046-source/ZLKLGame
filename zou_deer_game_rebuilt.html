@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>鄒路看鹿</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0c1410;
+      font-family: Georgia, "Times New Roman", "Noto Serif TC", serif;
+      color: #f7f5e9;
+    }
+
+    #game-root {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      max-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #1c2b22 0, #050806 55%, #020302 100%);
+      overflow: hidden;
+    }
+
+    #game-canvas {
+      height: 100vh;
+      max-height: 100vh;
+      aspect-ratio: 9 / 16;
+      width: auto;
+      display: block;
+      background: #071108;
+      touch-action: manipulation;
+    }
+
+    #hud {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .pill {
+      min-width: 96px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid #4e7a5a;
+      background: rgba(5, 10, 7, 0.85);
+      color: #f4f1e4;
+      text-align: center;
+      font-size: 14px;
+      transition: border-color .25s, color .25s;
+    }
+
+    .pill.warn { border-color: #c84030; color: #ffb0a0; }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(3, 6, 4, .78), rgba(1, 2, 1, .96));
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms ease-out;
+      z-index: 10;
+      padding: 16px;
+    }
+
+    .overlay.visible { opacity: 1; pointer-events: auto; }
+
+    .overlay-panel {
+      width: min(92vw, 390px);
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 18px 18px 20px;
+      border-radius: 18px;
+      background: linear-gradient(145deg, #111a14, #1b2b20);
+      border: 1px solid #4b7d5b;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .65);
+    }
+
+    .overlay-panel h1 {
+      font-size: 22px;
+      margin-bottom: 8px;
+      letter-spacing: .03em;
+    }
+
+    .primary-btn, .secondary-btn {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-family: inherit;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .primary-btn {
+      margin-top: 2px;
+      border: 1px solid #4f815f;
+      background: linear-gradient(145deg, #25432f, #345a3f);
+      color: #f7f5ea;
+      font-size: 15px;
+      letter-spacing: .05em;
+    }
+
+    .primary-btn:active { background: linear-gradient(145deg, #1f3928, #2b4a36); }
+
+    .secondary-btn {
+      margin-top: 8px;
+      border: 1px solid #6f7354;
+      background: rgba(35, 40, 25, .75);
+      color: #e4ddc0;
+      font-size: 14px;
+    }
+
+    .floating-label {
+      position: absolute;
+      left: 50%;
+      top: 16%;
+      transform: translateX(-50%);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid #f0c85e;
+      background: rgba(16, 20, 10, .9);
+      color: #ffe9aa;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease-out, transform 180ms ease-out;
+      z-index: 6;
+      white-space: nowrap;
+    }
+
+    .floating-label.visible { opacity: 1; transform: translate(-50%, -6px); }
+
+    .mini-card-row { display: flex; gap: 12px; margin-bottom: 14px; }
+    .mini-card { flex: 1; border-radius: 12px; padding: 12px; text-align: center; }
+    .mini-card.good { background: rgba(30, 50, 25, .7); border: 1px solid #4b7d5b; }
+    .mini-card.bad { background: rgba(50, 20, 15, .7); border: 1px solid #7d3b3b; }
+    .mini-card.plant { background: rgba(20, 35, 15, .7); border: 1px solid #6a7d3b; }
+
+    .leaderboard {
+      margin-top: 12px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #4b7d5b;
+      background: rgba(6, 14, 8, .62);
+    }
+
+    .rank-row {
+      display: grid;
+      grid-template-columns: 44px 1fr 64px;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(75, 125, 91, .35);
+    }
+
+    .rank-row:last-child { border-bottom: none; }
+    .rank-row.header { color: #b8d4a4; font-size: 12px; background: rgba(15, 31, 18, .8); }
+    .rank-score { text-align: right; color: #ffe38a; font-weight: bold; }
+    .result-score { font-size: 15px; margin: 8px 0 10px; line-height: 1.7; color: #e4ddc0; }
+
+    .status-note {
+      font-size: 11px;
+      color: #8dba7a;
+      line-height: 1.6;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid #4f815f;
+      background: rgba(5, 15, 8, 0.85);
+      color: #f7f5ea;
+      font-family: Georgia, "Times New Roman", "Noto Serif TC", serif;
+      font-size: 15px;
+      text-align: center;
+      outline: none;
+      letter-spacing: .08em;
+    }
+
+    @media (max-width: 430px) {
+      .overlay-panel { width: 94vw; padding: 16px; }
+      .mini-card-row { gap: 8px; }
+      .mini-card { padding: 9px; }
+      .pill { min-width: 86px; font-size: 13px; padding: 6px 9px; }
+    }
+  </style>
+</head>
+<body>
+<div id="game-root">
+  <div id="hud">
+    <div class="pill" id="pill-time">時間：<span id="time-label">30</span>s</div>
+    <div class="pill">分數：<span id="score-label">0</span></div>
+  </div>
+
+  <canvas id="game-canvas"></canvas>
+  <div id="floating-label" class="floating-label">+5</div>
+
+  <div id="overlay-start" class="overlay visible">
+    <div class="overlay-panel">
+      <h1>鄒路看鹿</h1>
+      <p style="font-size:13px;color:#b8d4a4;line-height:1.6;margin:6px 0 14px">
+        在鄒族的山林中，辨別獵物與禁忌。<br>
+        30 秒內累積 <strong style="color:#ffe38a">50 分</strong> 以上成為 suaemi 大勇士！
+      </p>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:#8dba7a;display:block;margin-bottom:6px">輸入你的獵人名號（最多 10 字）</label>
+        <input id="player-name" type="text" maxlength="10" placeholder="ZOUQI" autocomplete="off" />
+        <p id="name-error" style="font-size:11px;color:#ff9b9b;text-align:center;margin-top:5px;min-height:14px"></p>
+      </div>
+      <button id="btn-enter" class="primary-btn">進入山林</button>
+      <p id="firebase-status-start" class="status-note">排行榜資料庫連線檢查中...</p>
+    </div>
+  </div>
+
+  <div id="overlay-night" class="overlay">
+    <div class="overlay-panel" style="text-align:center">
+      <div style="font-size:44px;margin-bottom:10px">🌙</div>
+      <h1 style="font-size:19px;color:#c8d8f8;margin-bottom:12px;letter-spacing:.05em">黑夜中的山林</h1>
+      <div style="background:rgba(10,18,30,.7);border:1px solid #3a5080;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+        <p style="font-size:13px;color:#aac4e8;line-height:2">
+          🌿 你看到的場景為什麼這麼暗？<br>
+          <strong style="color:#e8d890;font-size:14px">鄒族的傳統狩獵多在晚上進行喔～</strong><br>
+          <span style="font-size:12px;color:#8aaccc">夜晚能更容易接近獵物，<br>是鄒族祖先代代相傳的智慧。</span>
+        </p>
+      </div>
+      <button id="btn-night" class="primary-btn">我準備好了</button>
+    </div>
+  </div>
+
+  <div id="overlay-tut1" class="overlay">
+    <div class="overlay-panel">
+      <h1 style="font-size:17px;color:#ffe38a;margin-bottom:10px">山林獵物（一）</h1>
+      <div class="mini-card-row">
+        <div class="mini-card good">
+          <canvas id="tut-c1" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#b6f2c3;font-size:13px;font-weight:bold">山羌</div>
+          <div style="color:#9fe29d;font-size:18px;font-weight:bold;margin:4px 0">＋5分</div>
+          <div style="color:#8dba7a;font-size:11px;line-height:1.5">台灣山區常見的<br>小型鹿科動物</div>
+        </div>
+        <div class="mini-card good">
+          <canvas id="tut-c2" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#b6f2c3;font-size:13px;font-weight:bold">公鹿</div>
+          <div style="color:#9fe29d;font-size:18px;font-weight:bold;margin:4px 0">＋5分</div>
+          <div style="color:#8dba7a;font-size:11px;line-height:1.5">頭頂有鹿角的<br>成年雄鹿</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#8dba7a;text-align:center;margin-bottom:12px">草叢搖動時出現，快速點擊得分！</div>
+      <button id="btn-tut1" class="primary-btn">繼續</button>
+    </div>
+  </div>
+
+  <div id="overlay-tut2" class="overlay">
+    <div class="overlay-panel">
+      <h1 style="font-size:17px;color:#ff9b9b;margin-bottom:10px">山林禁忌（二）</h1>
+      <div class="mini-card-row">
+        <div class="mini-card bad">
+          <canvas id="tut-c3" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#fbc2b7;font-size:13px;font-weight:bold">帶仔山豬</div>
+          <div style="color:#ff9b9b;font-size:18px;font-weight:bold;margin:4px 0">－15分</div>
+          <div style="color:#d08888;font-size:11px;line-height:1.5">帶著幼仔的母豬<br>絕對不能傷害！</div>
+        </div>
+        <div class="mini-card bad">
+          <canvas id="tut-c4" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#fbc2b7;font-size:13px;font-weight:bold">帶仔母鹿</div>
+          <div style="color:#ff9b9b;font-size:18px;font-weight:bold;margin:4px 0">－15分</div>
+          <div style="color:#d08888;font-size:11px;line-height:1.5">帶著幼仔的母鹿<br>要小心分辨！</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#d08888;text-align:center;margin-bottom:12px">誤傷帶仔母獸是鄒族的禁忌，分數大扣！</div>
+      <button id="btn-tut2" class="primary-btn">繼續</button>
+    </div>
+  </div>
+
+  <div id="overlay-tut3" class="overlay">
+    <div class="overlay-panel">
+      <h1 style="font-size:17px;color:#ffe38a;margin-bottom:10px">鄒族特有植物（三）</h1>
+      <div class="mini-card-row">
+        <div class="mini-card plant">
+          <canvas id="tut-c5" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#ffe9aa;font-size:13px;font-weight:bold">金草石斛</div>
+          <div style="color:#ffe38a;font-size:18px;font-weight:bold;margin:4px 0">＋3秒</div>
+          <div style="color:#c4b870;font-size:11px;line-height:1.5">阿里山特有蘭科<br>點擊即延長時間</div>
+        </div>
+        <div class="mini-card plant">
+          <canvas id="tut-c6" width="90" height="80" style="display:block;margin:0 auto 6px"></canvas>
+          <div style="color:#ffe9aa;font-size:13px;font-weight:bold">雀榕</div>
+          <div style="color:#ffe38a;font-size:18px;font-weight:bold;margin:4px 0">＋3秒</div>
+          <div style="color:#c4b870;font-size:11px;line-height:1.5">榕屬植物，鳥類<br>喜愛的果實</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#c4b870;text-align:center;margin-bottom:12px">從大樹旁不定時掉落，點擊即可採集！</div>
+      <button id="btn-tut3" class="primary-btn">遊戲開始！</button>
+    </div>
+  </div>
+
+  <div id="overlay-result" class="overlay">
+    <div class="overlay-panel">
+      <h1 id="result-title" style="font-size:20px;color:#ffe38a">狩獵結束</h1>
+      <p id="result-message" class="result-score"></p>
+      <h2 style="font-size:15px;color:#e4ddc0;margin-top:12px">前五名排行榜</h2>
+      <div id="leaderboard" class="leaderboard"></div>
+      <button id="btn-restart" class="primary-btn" style="margin-top:14px">再玩一次</button>
+      <button id="btn-refresh" class="secondary-btn">重新讀取排行榜</button>
+      <p id="leaderboard-note" class="status-note">排行榜連線中...</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+  import {
+    getFirestore,
+    collection,
+    addDoc,
+    query,
+    orderBy,
+    limit,
+    onSnapshot,
+    serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+  /*
+    Firebase 設定步驟：
+    1. 到 Firebase Console 建立專案
+    2. 建立 Web App
+    3. 建立 Firestore Database
+    4. 把 firebaseConfig 貼到下面
+    5. Firestore collection 名稱會自動使用 zou_deer_scores
+  */
+  const firebaseConfig = {
+    apiKey: "AIzaSyCqfYReYZ2XHvkBiHF99oHTv3-z11QFFjQ",
+    authDomain: "hunter-fe338.firebaseapp.com",
+    projectId: "hunter-fe338",
+    storageBucket: "hunter-fe338.firebasestorage.app",
+    messagingSenderId: "192673297378",
+    appId: "1:192673297378:web:52929bd4abf0b0eabc3fbb",
+    measurementId: "G-NJ2STMW93H"
+  };
+
+  const USE_FIREBASE = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
+  const COLLECTION_NAME = "zou_deer_scores";
+  const LOCAL_KEY = "zou_deer_game_local_backup_scores";
+
+  let db = null;
+  let scoresCollection = null;
+  let unsubscribeLeaderboard = null;
+  let latestLeaderboard = [];
+  let usingFirebase = false;
+
+  const canvas = document.getElementById("game-canvas");
+  const ctx = canvas.getContext("2d");
+  const timeLabel = document.getElementById("time-label");
+  const scoreLabel = document.getElementById("score-label");
+  const pillTime = document.getElementById("pill-time");
+  const floatingLabel = document.getElementById("floating-label");
+  const playerInput = document.getElementById("player-name");
+  const nameError = document.getElementById("name-error");
+  const resultTitle = document.getElementById("result-title");
+  const resultMessage = document.getElementById("result-message");
+  const leaderboardEl = document.getElementById("leaderboard");
+  const leaderboardNote = document.getElementById("leaderboard-note");
+  const firebaseStatusStart = document.getElementById("firebase-status-start");
+
+  const overlays = {
+    start: document.getElementById("overlay-start"),
+    night: document.getElementById("overlay-night"),
+    tut1: document.getElementById("overlay-tut1"),
+    tut2: document.getElementById("overlay-tut2"),
+    tut3: document.getElementById("overlay-tut3"),
+    result: document.getElementById("overlay-result")
+  };
+
+  const GAME_TIME = 30;
+  const WIDTH = 360;
+  const HEIGHT = 640;
+
+  let playerName = "ZOUQI";
+  let score = 0;
+  let timeLeft = GAME_TIME;
+  let gameRunning = false;
+  let lastTime = 0;
+  let spawnCooldown = 0;
+  let objects = [];
+  let particles = [];
+  let raf = null;
+  let lastSavedGameId = null;
+
+  const types = [
+    { id: "muntjac", label: "山羌", kind: "good", score: 5, weight: 28 },
+    { id: "stag", label: "公鹿", kind: "good", score: 5, weight: 24 },
+    { id: "boar", label: "帶仔山豬", kind: "bad", score: -15, weight: 18 },
+    { id: "doe", label: "帶仔母鹿", kind: "bad", score: -15, weight: 16 },
+    { id: "orchid", label: "金草石斛", kind: "plant", time: 3, weight: 7 },
+    { id: "fig", label: "雀榕", kind: "plant", time: 3, weight: 7 }
+  ];
+
+  function showOverlay(key) {
+    Object.values(overlays).forEach(el => el.classList.remove("visible"));
+    overlays[key].classList.add("visible");
+  }
+
+  function hideOverlays() {
+    Object.values(overlays).forEach(el => el.classList.remove("visible"));
+  }
+
+  function resize() {
+    const rect = document.getElementById("game-root").getBoundingClientRect();
+    let displayH = rect.height;
+    let displayW = displayH * 9 / 16;
+    if (displayW > rect.width) {
+      displayW = rect.width;
+      displayH = displayW * 16 / 9;
+    }
+    canvas.style.width = displayW + "px";
+    canvas.style.height = displayH + "px";
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = WIDTH * dpr;
+    canvas.height = HEIGHT * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  function sanitizeName(value) {
+    return value.trim().replace(/[<>"'&]/g, "").slice(0, 10);
+  }
+
+  function updateHud() {
+    timeLabel.textContent = Math.max(0, Math.ceil(timeLeft));
+    scoreLabel.textContent = score;
+    pillTime.classList.toggle("warn", timeLeft <= 8);
+  }
+
+  function chooseType() {
+    const total = types.reduce((sum, item) => sum + item.weight, 0);
+    let r = Math.random() * total;
+    for (const item of types) {
+      r -= item.weight;
+      if (r <= 0) return item;
+    }
+    return types[0];
+  }
+
+  function random(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function spawn() {
+    const type = chooseType();
+    const size = type.kind === "plant" ? random(34, 44) : random(48, 62);
+    objects.push({
+      ...type,
+      x: random(50, WIDTH - 50),
+      y: type.kind === "plant" ? random(205, 440) : random(265, 545),
+      size,
+      life: type.kind === "plant" ? 2.15 : 1.7,
+      maxLife: type.kind === "plant" ? 2.15 : 1.7,
+      wobble: random(0, Math.PI * 2)
+    });
+  }
+
+  function startGame() {
+    hideOverlays();
+    score = 0;
+    timeLeft = GAME_TIME;
+    objects = [];
+    particles = [];
+    spawnCooldown = 0;
+    lastSavedGameId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+    lastTime = performance.now();
+    gameRunning = true;
+    updateHud();
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(loop);
+  }
+
+  async function endGame() {
+    if (!gameRunning) return;
+    gameRunning = false;
+    cancelAnimationFrame(raf);
+    await saveScore(playerName, score, lastSavedGameId);
+    renderResult();
+    showOverlay("result");
+  }
+
+  function loop(now) {
+    if (!gameRunning) return;
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+
+    timeLeft -= dt;
+    spawnCooldown -= dt;
+
+    if (spawnCooldown <= 0) {
+      spawn();
+      spawnCooldown = random(0.43, 0.86);
+    }
+
+    objects.forEach(obj => {
+      obj.life -= dt;
+      obj.wobble += dt * 5;
+    });
+    objects = objects.filter(obj => obj.life > 0);
+
+    particles.forEach(p => {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 150 * dt;
+      p.life -= dt;
+    });
+    particles = particles.filter(p => p.life > 0);
+
+    updateHud();
+    draw();
+
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      updateHud();
+      endGame();
+      return;
+    }
+
+    raf = requestAnimationFrame(loop);
+  }
+
+  function pointerDown(event) {
+    if (!gameRunning) return;
+    event.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const point = event.touches ? event.touches[0] : event;
+    const x = (point.clientX - rect.left) / rect.width * WIDTH;
+    const y = (point.clientY - rect.top) / rect.height * HEIGHT;
+
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const obj = objects[i];
+      const dx = x - obj.x;
+      const dy = y - obj.y;
+      const r = obj.size * 0.75;
+      if (dx * dx + dy * dy <= r * r) {
+        collect(obj);
+        objects.splice(i, 1);
+        break;
+      }
+    }
+  }
+
+  function collect(obj) {
+    if (obj.kind === "plant") {
+      timeLeft += obj.time;
+      floatText(`+${obj.time}秒`, "#ffe38a");
+      burst(obj.x, obj.y, "plant");
+    } else {
+      score += obj.score;
+      if (score < 0) score = 0;
+      floatText(obj.score > 0 ? `+${obj.score}` : `${obj.score}`, obj.score > 0 ? "#9fe29d" : "#ff9b9b");
+      burst(obj.x, obj.y, obj.score > 0 ? "good" : "bad");
+    }
+    updateHud();
+  }
+
+  function floatText(text, color) {
+    floatingLabel.textContent = text;
+    floatingLabel.style.color = color;
+    floatingLabel.classList.add("visible");
+    clearTimeout(floatText.timer);
+    floatText.timer = setTimeout(() => floatingLabel.classList.remove("visible"), 520);
+  }
+
+  function burst(x, y, kind) {
+    for (let i = 0; i < 12; i++) {
+      particles.push({ x, y, vx: random(-65, 65), vy: random(-95, -20), life: random(.35, .75), kind });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    drawBackground();
+    drawMoon();
+    drawTrees();
+    drawGround();
+    objects.forEach(drawObject);
+    particles.forEach(drawParticle);
+    drawVignette();
+  }
+
+  function drawBackground() {
+    const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+    grad.addColorStop(0, "#071225");
+    grad.addColorStop(.48, "#07110b");
+    grad.addColorStop(1, "#030503");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = "rgba(255,255,220,.58)";
+    for (let i = 0; i < 36; i++) {
+      const x = (i * 71) % WIDTH;
+      const y = (i * 43) % 180 + 18;
+      ctx.globalAlpha = .2 + ((i % 4) * .1);
+      ctx.fillRect(x, y, 1.2, 1.2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawMoon() {
+    ctx.fillStyle = "rgba(230,226,170,.9)";
+    circle(284, 72, 24);
+    ctx.fillStyle = "rgba(7,18,37,.92)";
+    circle(294, 66, 22);
+  }
+
+  function drawTrees() {
+    for (let i = 0; i < 9; i++) {
+      const x = i * 48 - 20;
+      const h = 180 + (i % 3) * 40;
+      ctx.fillStyle = i % 2 ? "#07120a" : "#09170d";
+      ctx.fillRect(x + 20, 170, 14, h);
+      drawPine(x + 26, 170, 70 + (i % 4) * 8);
+    }
+  }
+
+  function drawPine(x, y, size) {
+    ctx.fillStyle = "rgba(15,42,21,.9)";
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - size * .7 + i * 26);
+      ctx.lineTo(x - size * .5, y + i * 26);
+      ctx.lineTo(x + size * .5, y + i * 26);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function drawGround() {
+    ctx.fillStyle = "#081009";
+    ctx.beginPath();
+    ctx.moveTo(0, 455);
+    ctx.quadraticCurveTo(100, 420, 210, 452);
+    ctx.quadraticCurveTo(300, 480, 360, 440);
+    ctx.lineTo(360, 640);
+    ctx.lineTo(0, 640);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(105,145,80,.25)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 28; i++) {
+      const x = (i * 37) % WIDTH;
+      const y = 500 + (i * 19) % 120;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + random(-3, 3), y - random(10, 24));
+      ctx.stroke();
+    }
+  }
+
+  function drawObject(obj) {
+    ctx.save();
+    const alphaIn = Math.min(1, (obj.maxLife - obj.life) / .2);
+    const alphaOut = Math.min(1, obj.life / .25);
+    ctx.globalAlpha = Math.max(.2, Math.min(alphaIn, alphaOut));
+    ctx.translate(obj.x, obj.y + Math.sin(obj.wobble) * 3);
+    ctx.scale(obj.size / 56, obj.size / 56);
+    if (obj.id === "muntjac") drawMuntjac();
+    if (obj.id === "stag") drawStag();
+    if (obj.id === "boar") drawBoar();
+    if (obj.id === "doe") drawDoe();
+    if (obj.id === "orchid") drawOrchid();
+    if (obj.id === "fig") drawFig();
+    ctx.restore();
+  }
+
+  function drawAnimalShadow() {
+    ctx.fillStyle = "rgba(0,0,0,.36)";
+    ellipse(0, 36, 34, 7);
+  }
+
+  function drawMuntjac() {
+    drawAnimalShadow();
+    ctx.fillStyle = "#9a6338";
+    ellipse(-4, 4, 30, 17);
+    ellipse(22, -3, 13, 11);
+    ctx.fillStyle = "#7a4a28";
+    ctx.fillRect(-22, 14, 5, 20);
+    ctx.fillRect(-4, 15, 5, 19);
+    ctx.fillRect(11, 14, 5, 20);
+    ctx.fillStyle = "#e4c78c";
+    ellipse(25, 0, 4, 3);
+    ctx.fillStyle = "#1b130d";
+    circle(26, -6, 1.8);
+    ctx.fillStyle = "#9a6338";
+    triangle(18, -13, 24, -27, 27, -10);
+  }
+
+  function drawStag() {
+    drawAnimalShadow();
+    ctx.fillStyle = "#8c5730";
+    ellipse(-6, 5, 32, 18);
+    ellipse(23, -4, 14, 12);
+    ctx.fillStyle = "#6a3f24";
+    ctx.fillRect(-22, 14, 5, 22);
+    ctx.fillRect(-2, 15, 5, 21);
+    ctx.fillRect(13, 14, 5, 22);
+    ctx.strokeStyle = "#d8c08a";
+    ctx.lineWidth = 3;
+    drawAntler(19, -14, -1);
+    drawAntler(27, -14, 1);
+    ctx.fillStyle = "#1b130d";
+    circle(27, -6, 1.8);
+  }
+
+  function drawBoar() {
+    drawAnimalShadow();
+    ctx.fillStyle = "#5a3e35";
+    ellipse(-4, 8, 34, 18);
+    ellipse(24, 4, 15, 12);
+    ctx.fillStyle = "#3e2a24";
+    ctx.fillRect(-20, 18, 5, 16);
+    ctx.fillRect(1, 19, 5, 15);
+    ctx.fillRect(14, 18, 5, 16);
+    ctx.fillStyle = "#f1e7d2";
+    triangle(33, 6, 43, 2, 35, 10);
+    ctx.fillStyle = "#7a5650";
+    ellipse(-28, 18, 11, 7);
+    ellipse(-38, 20, 7, 5);
+    ctx.fillStyle = "#ffb3a6";
+    circle(-40, 20, 1.2);
+  }
+
+  function drawDoe() {
+    drawAnimalShadow();
+    ctx.fillStyle = "#9a6a43";
+    ellipse(-6, 6, 31, 17);
+    ellipse(22, -2, 13, 11);
+    ctx.fillStyle = "#7b4f32";
+    ctx.fillRect(-21, 15, 5, 20);
+    ctx.fillRect(-3, 15, 5, 19);
+    ctx.fillRect(12, 14, 5, 20);
+    ctx.fillStyle = "#dfc69a";
+    for (let i = 0; i < 5; i++) circle(-17 + i * 8, 0, 2);
+    ctx.fillStyle = "#c99462";
+    ellipse(-30, 18, 10, 7);
+    ellipse(-38, 17, 6, 5);
+    ctx.fillStyle = "#1b130d";
+    circle(26, -5, 1.8);
+  }
+
+  function drawOrchid() {
+    ctx.strokeStyle = "#6ea861";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, 30);
+    ctx.bezierCurveTo(-8, 10, 10, -2, 0, -26);
+    ctx.stroke();
+    ctx.fillStyle = "#9fe29d";
+    ellipse(-12, 3, 12, 5, -.6);
+    ellipse(12, -8, 12, 5, .6);
+    ctx.fillStyle = "#ffe38a";
+    for (let i = 0; i < 5; i++) {
+      const a = i * Math.PI * 2 / 5;
+      ellipse(Math.cos(a) * 9, -20 + Math.sin(a) * 7, 8, 4, a);
+    }
+    ctx.fillStyle = "#f2b94b";
+    circle(0, -20, 4);
+  }
+
+  function drawFig() {
+    ctx.strokeStyle = "#7aa563";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, 31);
+    ctx.lineTo(0, -20);
+    ctx.stroke();
+    ctx.fillStyle = "#6fb96a";
+    ellipse(-16, -8, 16, 8, -.55);
+    ellipse(16, -10, 16, 8, .55);
+    ellipse(-9, 8, 14, 7, -.3);
+    ellipse(12, 7, 14, 7, .3);
+    ctx.fillStyle = "#a04e6a";
+    circle(-5, -21, 5);
+    circle(8, -23, 4);
+    circle(4, -14, 4);
+  }
+
+  function drawParticle(p) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 2));
+    ctx.fillStyle = p.kind === "bad" ? "#ff9b9b" : p.kind === "plant" ? "#ffe38a" : "#9fe29d";
+    circle(p.x, p.y, 2.4);
+    ctx.restore();
+  }
+
+  function drawVignette() {
+    const grad = ctx.createRadialGradient(WIDTH / 2, HEIGHT / 2, 80, WIDTH / 2, HEIGHT / 2, 350);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(0,0,0,.6)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  }
+
+  function ellipse(x, y, rx, ry, rotation = 0) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, rotation, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function circle(x, y, r) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function triangle(x1, y1, x2, y2, x3, y3) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineTo(x3, y3);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawAntler(x, y, side) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + side * 8, y - 15);
+    ctx.moveTo(x + side * 5, y - 9);
+    ctx.lineTo(x + side * 1, y - 20);
+    ctx.moveTo(x + side * 9, y - 12);
+    ctx.lineTo(x + side * 15, y - 22);
+    ctx.stroke();
+  }
+
+  function getLocalLeaderboard() {
+    try {
+      const raw = localStorage.getItem(LOCAL_KEY);
+      const data = raw ? JSON.parse(raw) : [];
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveLocalScore(item) {
+    const data = [...getLocalLeaderboard(), item]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+    latestLeaderboard = data;
+    renderLeaderboard(data);
+  }
+
+  async function saveScore(name, value, gameId) {
+    const item = {
+      name: sanitizeName(name) || "ZOUQI",
+      score: Number(value) || 0,
+      gameId,
+      createdAtLocal: new Date().toISOString()
+    };
+
+    if (usingFirebase && scoresCollection) {
+      try {
+        await addDoc(scoresCollection, {
+          ...item,
+          createdAt: serverTimestamp()
+        });
+        leaderboardNote.textContent = "分數已寫入 Firebase，排行榜會即時更新。";
+        return;
+      } catch (error) {
+        console.error("Firebase 寫入失敗，改用本機備援：", error);
+        leaderboardNote.textContent = "Firebase 寫入失敗，這次分數先存在本機備援。";
+      }
+    }
+
+    saveLocalScore(item);
+  }
+
+  function renderLeaderboard(data = latestLeaderboard) {
+    leaderboardEl.innerHTML = "";
+    const header = document.createElement("div");
+    header.className = "rank-row header";
+    header.innerHTML = "<span>名次</span><span>玩家</span><span class='rank-score'>分數</span>";
+    leaderboardEl.appendChild(header);
+
+    if (!data.length) {
+      const empty = document.createElement("div");
+      empty.className = "rank-row";
+      empty.style.gridTemplateColumns = "1fr";
+      empty.style.color = "#8dba7a";
+      empty.textContent = "目前還沒有紀錄。";
+      leaderboardEl.appendChild(empty);
+      return;
+    }
+
+    data.slice(0, 5).forEach((item, index) => {
+      const row = document.createElement("div");
+      row.className = "rank-row";
+
+      const rank = document.createElement("span");
+      rank.textContent = index === 0 ? "🏆 1" : String(index + 1);
+
+      const player = document.createElement("span");
+      player.textContent = item.name || "ZOUQI";
+
+      const point = document.createElement("span");
+      point.className = "rank-score";
+      point.textContent = `${Number(item.score) || 0} 分`;
+
+      row.append(rank, player, point);
+      leaderboardEl.appendChild(row);
+    });
+  }
+
+  function renderResult() {
+    const win = score >= 50;
+    resultTitle.textContent = win ? "成為 suaemi 大勇士！" : "山林試煉結束";
+    resultTitle.style.color = win ? "#ffe38a" : "#e4ddc0";
+    resultMessage.innerHTML = "";
+
+    const line1 = document.createElement("div");
+    line1.innerHTML = "玩家：";
+    const strongName = document.createElement("strong");
+    strongName.style.color = "#b6f2c3";
+    strongName.textContent = playerName;
+    line1.appendChild(strongName);
+
+    const line2 = document.createElement("div");
+    line2.innerHTML = `本次分數：<strong style="color:#ffe38a">${score} 分</strong>`;
+
+    const line3 = document.createElement("div");
+    line3.textContent = win ? "你成功辨別獵物與禁忌，山林記住了你的眼力。" : "還差一點點，再挑戰一次就有機會進入前五名。";
+
+    resultMessage.append(line1, line2, line3);
+    renderLeaderboard();
+  }
+
+  function drawTutorialIcons() {
+    const ids = ["tut-c1", "tut-c2", "tut-c3", "tut-c4", "tut-c5", "tut-c6"];
+    const labels = ["山羌", "公鹿", "山豬", "母鹿", "蘭花", "雀榕"];
+    ids.forEach((id, i) => {
+      const c = document.getElementById(id);
+      if (!c) return;
+      const t = c.getContext("2d");
+      t.clearRect(0, 0, c.width, c.height);
+      t.fillStyle = i < 2 ? "#9a6338" : i < 4 ? "#654039" : "#6fb96a";
+      t.beginPath();
+      t.ellipse(45, 34, i >= 4 ? 16 : 27, i >= 4 ? 22 : 15, 0, 0, Math.PI * 2);
+      t.fill();
+      if (i === 1) {
+        t.strokeStyle = "#d8c08a";
+        t.lineWidth = 2;
+        t.beginPath();
+        t.moveTo(36, 22); t.lineTo(28, 8); t.moveTo(54, 22); t.lineTo(62, 8); t.stroke();
+      }
+      if (i >= 4) {
+        t.fillStyle = "#ffe38a";
+        t.beginPath();
+        t.arc(45, 32, 7, 0, Math.PI * 2);
+        t.fill();
+      }
+      t.fillStyle = "#f7f5e9";
+      t.font = "12px Georgia";
+      t.textAlign = "center";
+      t.fillText(labels[i], 45, 72);
+    });
+  }
+
+  function initFirebaseLeaderboard() {
+    if (!USE_FIREBASE) {
+      usingFirebase = false;
+      latestLeaderboard = getLocalLeaderboard();
+      firebaseStatusStart.textContent = "尚未填入 Firebase 設定，目前使用本機備援排行榜。";
+      leaderboardNote.textContent = "尚未填入 Firebase 設定，目前使用本機備援排行榜。";
+      renderLeaderboard(latestLeaderboard);
+      return;
+    }
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      scoresCollection = collection(db, COLLECTION_NAME);
+      const topFiveQuery = query(scoresCollection, orderBy("score", "desc"), limit(5));
+
+      unsubscribeLeaderboard = onSnapshot(topFiveQuery, snapshot => {
+        usingFirebase = true;
+        latestLeaderboard = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderLeaderboard(latestLeaderboard);
+        firebaseStatusStart.textContent = "Firebase 排行榜已連線。";
+        leaderboardNote.textContent = "目前顯示 Firebase 即時同步排行榜。";
+      }, error => {
+        console.error("Firebase 即時排行榜讀取失敗：", error);
+        usingFirebase = false;
+        latestLeaderboard = getLocalLeaderboard();
+        firebaseStatusStart.textContent = "Firebase 讀取失敗，目前使用本機備援排行榜。";
+        leaderboardNote.textContent = "Firebase 讀取失敗，目前使用本機備援排行榜。";
+        renderLeaderboard(latestLeaderboard);
+      });
+    } catch (error) {
+      console.error("Firebase 初始化失敗：", error);
+      usingFirebase = false;
+      latestLeaderboard = getLocalLeaderboard();
+      firebaseStatusStart.textContent = "Firebase 初始化失敗，目前使用本機備援排行榜。";
+      leaderboardNote.textContent = "Firebase 初始化失敗，目前使用本機備援排行榜。";
+      renderLeaderboard(latestLeaderboard);
+    }
+  }
+
+  document.getElementById("btn-enter").addEventListener("click", () => {
+    const clean = sanitizeName(playerInput.value);
+    if (!clean) {
+      nameError.textContent = "請先輸入你的名號喔";
+      return;
+    }
+    playerName = clean;
+    nameError.textContent = "";
+    showOverlay("night");
+  });
+
+  playerInput.addEventListener("keydown", event => {
+    if (event.key === "Enter") document.getElementById("btn-enter").click();
+  });
+
+  document.getElementById("btn-night").addEventListener("click", () => showOverlay("tut1"));
+  document.getElementById("btn-tut1").addEventListener("click", () => showOverlay("tut2"));
+  document.getElementById("btn-tut2").addEventListener("click", () => showOverlay("tut3"));
+  document.getElementById("btn-tut3").addEventListener("click", startGame);
+  document.getElementById("btn-restart").addEventListener("click", () => showOverlay("start"));
+  document.getElementById("btn-refresh").addEventListener("click", () => renderLeaderboard(latestLeaderboard));
+
+  canvas.addEventListener("mousedown", pointerDown);
+  canvas.addEventListener("touchstart", pointerDown, { passive: false });
+  window.addEventListener("resize", resize);
+  window.addEventListener("beforeunload", () => {
+    if (unsubscribeLeaderboard) unsubscribeLeaderboard();
+  });
+
+  resize();
+  updateHud();
+  drawTutorialIcons();
+  initFirebaseLeaderboard();
+</script>
+</body>
+</html>
