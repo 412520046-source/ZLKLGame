@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>鄒族獵人文化寶庫</title>
+  <style>
+    :root{
+      --bg1:#03120d;
+      --bg2:#0a2a1f;
+      --paper:#123629;
+      --shadow:rgba(0,0,0,.35);
+    }
+
+    *{
+      box-sizing:border-box;
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    html,body{
+      margin:0;
+      width:100%;
+      height:100%;
+      overflow:hidden;
+      font-family:"Noto Serif TC","Microsoft JhengHei",serif;
+      background:
+        radial-gradient(circle at 20% 50%, rgba(188,154,92,.14), transparent 26%),
+        radial-gradient(circle at 80% 50%, rgba(188,154,92,.1), transparent 24%),
+        linear-gradient(90deg, var(--bg1), var(--bg2) 50%, var(--bg1));
+    }
+
+    body{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+
+    .viewer{
+      position:relative;
+      width:min(92vw, 470px);
+      aspect-ratio:9 / 16;
+      perspective:2200px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .book{
+      position:relative;
+      width:100%;
+      height:100%;
+      transform-style:preserve-3d;
+      filter:drop-shadow(0 28px 40px var(--shadow));
+    }
+
+    .page{
+      position:absolute;
+      inset:0;
+      border-radius:18px;
+      overflow:hidden;
+      background:var(--paper);
+      transform-origin:left center;
+      transform-style:preserve-3d;
+      backface-visibility:hidden;
+      transition:
+        transform 950ms cubic-bezier(.2,.72,.18,1),
+        filter 950ms ease,
+        box-shadow 950ms ease;
+      box-shadow:
+        0 10px 28px rgba(0,0,0,.28),
+        inset 0 0 0 1px rgba(0,0,0,.04);
+      cursor:pointer;
+    }
+
+    .page::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index:2;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.18), transparent 12%, transparent 78%, rgba(255,255,255,.18)),
+        radial-gradient(circle at 0 50%, rgba(255,255,255,.18), transparent 22%);
+      opacity:.42;
+      transition:opacity 950ms ease;
+    }
+
+    .page img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      display:block;
+      background:var(--paper);
+      user-select:none;
+      pointer-events:none;
+    }
+
+    .page.flipped{
+      transform:rotateY(-178deg);
+      filter:brightness(.88);
+      box-shadow:
+        -16px 10px 30px rgba(0,0,0,.16),
+        inset 0 0 0 1px rgba(0,0,0,.04);
+    }
+
+    .page.flipped::before{
+      opacity:.66;
+    }
+
+    .page.peek{
+      animation:peek 2.1s ease-in-out infinite;
+    }
+
+    @keyframes peek{
+      0%,100%{transform:rotateY(0deg);}
+      50%{transform:rotateY(-7deg);}
+    }
+
+    .page.turning-next{
+      animation:turnNext 950ms cubic-bezier(.2,.72,.18,1);
+    }
+
+    .page.turning-prev{
+      animation:turnPrev 950ms cubic-bezier(.2,.72,.18,1);
+    }
+
+    @keyframes turnNext{
+      0%{transform:rotateY(0deg);}
+      55%{transform:rotateY(-108deg) translateZ(6px);}
+      100%{transform:rotateY(-178deg);}
+    }
+
+    @keyframes turnPrev{
+      0%{transform:rotateY(-178deg);}
+      55%{transform:rotateY(-72deg) translateZ(6px);}
+      100%{transform:rotateY(0deg);}
+    }
+
+    .nav-zone{
+      position:absolute;
+      top:0;
+      bottom:0;
+      width:28%;
+      z-index:50;
+      cursor:pointer;
+    }
+
+    .nav-zone.left{left:-6%;}
+    .nav-zone.right{right:-6%;}
+
+    @media (max-width:520px){
+      body{padding:10px;}
+      .viewer{
+        width:min(96vw, 470px);
+      }
+      .nav-zone{
+        width:34%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="viewer" aria-label="翻頁冊子">
+    <div class="book" id="book">
+      <article class="page" aria-label="第 1 頁"><img src="assets/page1.jpg" alt="第 1 頁"></article>
+      <article class="page" aria-label="第 2 頁"><img src="assets/page2.jpg" alt="第 2 頁"></article>
+      <article class="page" aria-label="第 3 頁"><img src="assets/page3.jpg" alt="第 3 頁"></article>
+      <article class="page" aria-label="第 4 頁"><img src="assets/page4.jpg" alt="第 4 頁"></article>
+      <article class="page" aria-label="第 5 頁"><img src="assets/page5.jpg" alt="第 5 頁"></article>
+      <article class="page" aria-label="第 6 頁"><img src="assets/page6.jpg" alt="第 6 頁"></article>
+    </div>
+
+    <div class="nav-zone left" aria-hidden="true"></div>
+    <div class="nav-zone right" aria-hidden="true"></div>
+  </main>
+
+  <script>
+    const pages = Array.from(document.querySelectorAll(".page"));
+    const leftZone = document.querySelector(".nav-zone.left");
+    const rightZone = document.querySelector(".nav-zone.right");
+    const total = pages.length;
+    let current = 0;
+    let locked = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    function layoutPages(){
+      pages.forEach((page, index) => {
+        page.style.zIndex = total - index;
+        page.classList.toggle("flipped", index < current);
+        page.classList.remove("peek");
+      });
+
+      if(current < total - 1){
+        pages[current].classList.add("peek");
+      }
+    }
+
+    function unlockSoon(){
+      setTimeout(() => locked = false, 960);
+    }
+
+    function nextPage(){
+      if(locked || current >= total - 1) return;
+      locked = true;
+      const page = pages[current];
+      page.classList.remove("peek");
+      page.classList.add("turning-next");
+      current += 1;
+      layoutPages();
+      setTimeout(() => page.classList.remove("turning-next"), 960);
+      unlockSoon();
+    }
+
+    function prevPage(){
+      if(locked || current <= 0) return;
+      locked = true;
+      current -= 1;
+      const page = pages[current];
+      page.classList.remove("peek");
+      page.classList.add("turning-prev");
+      layoutPages();
+      setTimeout(() => page.classList.remove("turning-prev"), 960);
+      unlockSoon();
+    }
+
+    rightZone.addEventListener("click", nextPage);
+    leftZone.addEventListener("click", prevPage);
+
+    document.addEventListener("keydown", (event) => {
+      if(event.key === "ArrowRight") nextPage();
+      if(event.key === "ArrowLeft") prevPage();
+    });
+
+    document.addEventListener("touchstart", (event) => {
+      touchStartX = event.changedTouches[0].screenX;
+      touchStartY = event.changedTouches[0].screenY;
+    }, { passive:true });
+
+    document.addEventListener("touchend", (event) => {
+      const dx = event.changedTouches[0].screenX - touchStartX;
+      const dy = event.changedTouches[0].screenY - touchStartY;
+      if(Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy)) return;
+      if(dx < 0) nextPage();
+      if(dx > 0) prevPage();
+    }, { passive:true });
+
+    layoutPages();
+  </script>
+</body>
+</html>
